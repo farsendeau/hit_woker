@@ -1,0 +1,10 @@
+.vscode/
+docs/*
+explain
+hit_woker.code-workspace
+*nes
+*nes*
+*chr
+megaman.asm
+run.sh
+hw.fns
