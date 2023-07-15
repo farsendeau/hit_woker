@@ -14,12 +14,12 @@
 ; VARIABLE ET CONSTANTES
   .rsset $0000
 echo .rs 1
+pointer .rs 15
 PPU2000value .rs 1
 PPU2001Value .rs 1
 stageId .rs 1
 currentBank .rs 1
 saveBank .rs 1
-pointer .rs 4
 none .rs 2  ; Aussi utilisé pour BankSwitchTile
 stallTimer .rs 1 ; Timer quand il n'y a rien faire
 joyPad    .rs 2 ; Boutons encore pressés 
@@ -76,7 +76,8 @@ OAMDMA  = $4014
 
 ;-----------
   .bank 2		;01 (1/2)
-  .org $8000
+  .org $8000	
+  .incbin "stage1.chr"
 
   .bank 3		;01 (2/2)
   .org $A000
@@ -130,9 +131,34 @@ roomTileTitleScreen:
 	.db $04, $4c ; bank 3. 4 x 256 (4 lignes) adresse 80+4c
 	.db $09, $5c ; bank 4. 9 x 256 (9 lignes) adresse 80+5c
 
+stikTileTable:
+	.dw $0000
+	.dw stikTileStage1
+
+stikTileStage1:
+	.db $01
+	.db $20, $01
+
+dataSkitTable:
+	.dw 0000
+	.dw dataSkit11
+
+	; $fe,$xx,$yy = $yy sera répété $xx fois
+	; $fd,$xx,$yy = $yy sera incrementé $xx fois
+dataSkit11:	
+	.db $20,$a9, $fe,$05,$45, $fd,$05,$40, $fe,$04,$45, $ff
+	.db $20,$c9, $45,$45,$45, $fd,$07,$45, $fe,$04,$45, $ff
+	.db $20,$e9, $fe,$04,$45, $fd,$07,$4c, $45,$45,$45, $ff
+	.db $21,$09, $45,$45,$45, $fd,$08,$53, $45,$45,$45, $ff
+	.db $21,$29, $fe,$04,$45, $fd,$07,$5b, $45,$45,$45, $ff
+	.db $21,$49, $fe,$05,$45, $fd,$06,$62, $45,$45,$45, $ff
+	.db $21,$69, $fe,$06,$45, $fd,$07,$69, $45, $ff
+	.db $21,$89, $fe,$07,$45, $fd,$06,$70, $45, $ff
+	.db $21,$a9, $fe,$07,$45, $fd,$07,$77, $ff
+	.db $21,$c9, $fe,$07,$45, $fd,$07,$7e, $ff
+
   .bank 11		;05
   .org $A000
-
 ;-----------
 
   .bank 12		;06
@@ -170,7 +196,9 @@ Reset2:
 	sta PPU2001Value 
 	
 	; On met les chr en RAM
-	lda stageId ; ici stage_id = 0 (landing screen)
+	;lda stageId ; ici stage_id = 0 (landing screen)
+	lda #0
+	sta pointer+2
 	jsr WriteChr
 	
 	; Init stage palette
@@ -185,7 +213,7 @@ Reset2:
 	lda #$0B
 	sta $06
 	ldx #$ff
-
+	
 	.newLine:
 	dec $06
 	bmi .endLoopDataTitle
@@ -250,10 +278,137 @@ Reset2:
 	; init stage 1
 	lda #1
 	sta stageId
-	lda #$11       ; charge bank 11
-	jsr BankSwitch
+	;lda #$11       ; charge bank 11
+	;jsr BankSwitch
+
+; Scénette de début de stage
+SkitStage:
+	; Turn off PPU
+	jsr DisableNMIPPU
+
+	; Charge tiles pour les skits en RAM
+	;   stageId est déjà setté
+	lda #1
+	sta pointer+2
+	jsr WriteChr
+
+	; Charge 2 Nametables en PPU (2 skits)
+	;    cadre pour les deux Nametables
+	lda #$20
+	sta pointer+2
+	lda #$21
+	sta pointer+3
+	jsr SkitStageDrawFrame
+
+	lda #$24
+	sta pointer+2
+	lda #$25
+	sta pointer+3
+	jsr SkitStageDrawFrame
+
+	lda #12
+	sta saveBank
+	ldy stageId
+
+	; charche title dans les deux Nametables	
+	lda #0
+	sta $03 ; init save Y
+	sta $06 ; init position courante ligne
+	sta $08
+	lda #$0a
+	sta $07
+
+	.loopDataTile:
+		jsr WriteSkitChr
+		lda ppuTransferRawSize
+		beq .dontTransfer
+		jsr PPUTransferRaw
+		.dontTransfer:
+		lda $08
+		cmp #$ff
+		bne .loopDataTile
+		lda #0
+		sta $08
+		dec $07
+		bne .loopDataTile
+
+	; Turn on PPU
+	lda PPU2000value
+	ora #$80
+	sta PPU2000value
+	sta PPUCTRL
+
+
+	.newFrame:	
+	jsr NextFrame
 	
-	jmp SkitStage
+	jmp .newFrame
+	rts
+
+SkitStageDrawFrame:
+	ldy #01
+	lda pointer+2
+	sta PPUADDR
+	lda #$88
+	sta PPUADDR
+	lda #$35
+	sta PPUDATA
+	lda #$36
+	ldx #$0d ; 13
+	.loopFrameRowTop:
+		sta PPUDATA
+		dex
+		bpl .loopFrameRowTop
+	lda #$37
+	sta PPUDATA
+
+	lda pointer+3
+	sta PPUADDR
+	lda #$E8
+	sta PPUADDR	
+	lda #$32
+	sta PPUDATA
+	lda #$33
+	ldx #$0d ; 13
+	.loopFrameRowBottom:
+		sta PPUDATA
+		dex
+		bpl .loopFrameRowBottom
+	lda #$34
+	sta PPUDATA
+	
+	lda PPU2000value 
+	ora #$04         ; inc ppu par 32
+	sta PPU2000value
+	sta PPUCTRL
+	lda pointer+2
+	sta PPUADDR
+	lda #$A8
+	sta PPUADDR
+	ldx #$09
+	lda #$31
+	.loopFrameRowLeft:
+		sta PPUDATA
+		dex
+		bpl .loopFrameRowLeft
+
+	lda pointer+2
+	sta PPUADDR
+	lda #$B7
+	sta PPUADDR
+	ldx #$09
+	lda #$30
+	.loopFrameRowRight:
+		sta PPUDATA
+		dex
+		bpl .loopFrameRowRight
+
+	lda PPU2000value  ; inc ppu par 1
+ 	and #$FB
+	sta PPU2000value
+	sta PPUCTRL
+
+	rts
 
 dataTitle:
 	.db $20,$CE, $30, $FF
@@ -275,7 +430,7 @@ paletteStageTitle:
     .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10
 	; unknown
     .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f
-	
+		
   .bank 13		;06
   .org $A000
 
@@ -353,18 +508,128 @@ BankSwitchTile:
 	rts
 	
 ;; CHR
+
+WriteSkitChr:
+	jsr BankSwitch10
+	lda stageId
+	asl a
+	tay
+	; récupération dataSkitXX
+	lda dataSkitTable, y
+	sta $01
+	iny 
+	lda dataSkitTable, y
+	sta $02
+
+	; PPUADDR
+	ldy $03
+	lda $06
+	bne .restorePPUAddr
+	; Init PPU Addr
+	lda [$01], y
+	sta $04
+	sta ppuTransferRawAddr
+	iny
+	lda [$01], y
+	sta $05
+	sta ppuTransferRawAddr+1
+	bne .handleData
+	.restorePPUAddr:
+		clc
+		lda $04
+		sta ppuTransferRawAddr
+		lda $05
+		adc $06
+		sta ppuTransferRawAddr+1
+
+	.handleData:
+		; PPUDATA
+		iny
+		lda [$01], y
+		cmp #$ff
+		beq .resetCurrentLine
+		cmp #$fe
+		beq .repeatData
+		cmp #$fd
+		beq .incData
+		; simple tuile
+		sta ppuTransferRawBuf
+		inc ppuTransferRawSize
+		inc $06 ; inc courante ligne position
+		bne .end
+		.repeatData:
+			ldx #00
+			iny
+			lda [$01], y ; Nb de fois que la data sera répétée
+			sta $08
+			iny
+			.loopRepeatData:
+				lda [$01], y ; tile
+				sta ppuTransferRawBuf, x
+				inc ppuTransferRawSize
+				inc $06 ; inc courante ligne position
+				inx
+				dec $08
+				bne .loopRepeatData
+			beq .end ; ici $08 sera 0 donc branchement à .end
+		.incData:
+			ldx #00
+			stx $08
+			iny 
+			lda [$01], y ; Nb de fois que la data sera inc
+			sta $09
+			iny
+			clc
+			.loopIncData:
+				lda [$01], y; tille
+				adc $08 ; on ajout++
+				sta ppuTransferRawBuf, x
+				inc ppuTransferRawSize
+				inc $06 ; inc courante ligne position
+				inc $08
+				inx
+				dec $09
+				bne .loopIncData
+			beq .end	
+	.resetCurrentLine:
+	iny
+	sta $08 ; on save #$FF pour sortir de loopDataTile
+	lda #00 ; reset de la courante ligne
+	sta $06
+
+	.end:
+	; save Y
+	sty $03
+
+	lda saveBank
+	jsr BankSwitch
+	rts
+
 ; Appellé en début de chaque stage + reset
+; pointer  : Low Addr
+; pointer+1 : High Addr
+; pointer+2 : Type skit/chr
 WriteChr:
 	; Récupération de la roomTile pour le stage en cours
 	jsr BankSwitch10
 	lda stageId
 	asl a ; table de words
 	tay
-	lda roomTileTable, y
-	sta pointer
-	lda roomTileTable+1, y
-	sta pointer+1
 	
+	lda pointer+2
+	beq .skit
+	lda stikTileTable, y
+	sta pointer
+	lda stikTileTable+1, y
+	sta pointer+1
+	bne .next ; inconditionnel branchememnt
+	.skit:
+		lda roomTileTable, y
+		sta pointer
+		lda roomTileTable+1, y
+		sta pointer+1
+	
+	.next:
 	ldy #0
 	lda [pointer], y ; Nombre de bank qu'il faut récupérer
 	sta $08
@@ -520,7 +785,7 @@ PaletteSetupForBGwith3F0:
 ;00      | PPU Addr high
 ;01      | PPU Addr low
 ;02-xx   | Raw data (tiles/attr)
-PPUTranferRaw:
+PPUTransferRaw:
 	lda ppuTransferRawAddr
 	sta PPUADDR
 	lda ppuTransferRawAddr+1
@@ -604,15 +869,6 @@ DisableNMIPPU:
 	sta PPUMASK 
 	
 	rts
-	
-; Scénette de début de stage
-SkitStage:
-	; Turn off ppu
-	jsr DisableNMIPPU
-	
-	; 
-
-	rts
 
 NMI:
 	pha  ; save de a sur la pile
@@ -645,10 +901,14 @@ NMI:
 	jsr UpdatePalettes
 	.paletteUpdated:
 	
-	; todo RawPPUTransfer
+	; RawPPUTransfer
+	lda ppuTransferRawSize
+	beq .ppuTransferRawEnd
+	jsr PPUTransferRaw
+	.ppuTransferRawEnd:
+	
 	; todo scroll position
 
-	
 	; Restore NMI
 	lda PPU2001Value
 	ora #$1e
@@ -669,7 +929,6 @@ NMI:
 	sta nmiGfxUpdateDone
 	inc frameCounter
 	
-	
 	; update audio
 	; random seed
 	
@@ -686,7 +945,6 @@ NMI:
 	
 	RTI 	
 
-	
 mainLoop:	
 	inc $0F
 	JMP mainLoop
@@ -694,7 +952,6 @@ mainLoop:
 ;-------------------	
   .bank 15		;07 (2/2 last bank/fixed)
   .org $E000
-	
 	
 ; Interupt
   .org $FFFA     ;first of the three vectors starts here
