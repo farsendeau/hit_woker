@@ -141,7 +141,11 @@ stikTileStage1:
 
 dataSkitTable:
 	.dw 0000
+	.dw dataSkit1TablePointer
+
+dataSkit1TablePointer:
 	.dw dataSkit11
+	.dw dataSkit12
 
 	; $fe,$xx,$yy = $yy sera répété $xx fois
 	; $fd,$xx,$yy = $yy sera incrementé $xx fois
@@ -156,6 +160,19 @@ dataSkit11:
 	.db $21,$89, $fe,$07,$45, $fd,$06,$70, $45, $ff
 	.db $21,$a9, $fe,$07,$45, $fd,$07,$77, $ff
 	.db $21,$c9, $fe,$07,$45, $fd,$07,$7e, $ff
+
+dataSkit12:
+	.db $24,$a9, $fe,$05,$45, $fd,$05,$40, $fe,$04,$45, $ff
+	.db $24,$c9, $45,$45,$45, $fd,$07,$45, $fe,$04,$45, $ff
+	.db $24,$e9, $fe,$04,$45, $fd,$07,$4c, $45,$45,$45, $ff
+	.db $25,$09, $45,$45,$45, $fd,$08,$53, $45,$45,$45, $ff
+	.db $25,$29, $fe,$04,$45, $fd,$07,$5b, $45,$45,$45, $ff
+	.db $25,$49, $fe,$05,$45, $fd,$06,$62, $45,$45,$45, $ff
+	.db $25,$69, $fe,$06,$45, $fd,$07,$69, $45, $ff
+	.db $25,$89, $fe,$07,$45, $fd,$06,$70, $45, $ff
+	.db $25,$a9, $fe,$07,$45, $fd,$07,$77, $ff
+	.db $25,$c9, $fe,$07,$45, $fd,$07,$7e, $ff
+
 
   .bank 11		;05
   .org $A000
@@ -314,7 +331,9 @@ SkitStage:
 	lda #0
 	sta $03 ; init save Y
 	sta $06 ; init position courante ligne
-	sta $08
+	sta $08 ; init diver (loop i repeatData ou inc data incData)
+	lda #01
+	sta $0c ; charge skit 1 nametable 24xx
 	lda #$0a
 	sta $07
 
@@ -331,6 +350,9 @@ SkitStage:
 		sta $08
 		dec $07
 		bne .loopDataTile
+		dec $0c ; charge skit 0 namateble 20xx
+		bpl .loopDataTile
+
 
 	; Turn on PPU
 	lda PPU2000value
@@ -514,23 +536,33 @@ WriteSkitChr:
 	lda stageId
 	asl a
 	tay
-	; récupération dataSkitXX
+	; récupération dataSkitTable
 	lda dataSkitTable, y
 	sta $01
 	iny 
 	lda dataSkitTable, y
 	sta $02
 
+	; récupération data dans dataSkitXXTablePointer
+	lda $0c
+	asl a
+	tay
+	lda [$01], y
+	sta $0a
+	iny
+	lda [$01], y
+	sta $0b
+
 	; PPUADDR
 	ldy $03
 	lda $06
 	bne .restorePPUAddr
 	; Init PPU Addr
-	lda [$01], y
+	lda [$0a], y
 	sta $04
 	sta ppuTransferRawAddr
 	iny
-	lda [$01], y
+	lda [$0a], y
 	sta $05
 	sta ppuTransferRawAddr+1
 	bne .handleData
@@ -545,7 +577,7 @@ WriteSkitChr:
 	.handleData:
 		; PPUDATA
 		iny
-		lda [$01], y
+		lda [$0a], y
 		cmp #$ff
 		beq .resetCurrentLine
 		cmp #$fe
@@ -560,11 +592,11 @@ WriteSkitChr:
 		.repeatData:
 			ldx #00
 			iny
-			lda [$01], y ; Nb de fois que la data sera répétée
+			lda [$0a], y ; Nb de fois que la data sera répétée
 			sta $08
 			iny
 			.loopRepeatData:
-				lda [$01], y ; tile
+				lda [$0a], y ; tile
 				sta ppuTransferRawBuf, x
 				inc ppuTransferRawSize
 				inc $06 ; inc courante ligne position
@@ -576,12 +608,12 @@ WriteSkitChr:
 			ldx #00
 			stx $08
 			iny 
-			lda [$01], y ; Nb de fois que la data sera inc
+			lda [$0a], y ; Nb de fois que la data sera inc
 			sta $09
 			iny
 			clc
 			.loopIncData:
-				lda [$01], y; tille
+				lda [$0a], y; tille
 				adc $08 ; on ajout++
 				sta ppuTransferRawBuf, x
 				inc ppuTransferRawSize
