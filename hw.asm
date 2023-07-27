@@ -146,32 +146,90 @@ dataSkitTable:
 dataSkit1TablePointer:
 	.dw dataSkit11
 	.dw dataSkit12
+	.dw dataSkit13
 
 	; $fe,$xx,$yy = $yy sera répété $xx fois
 	; $fd,$xx,$yy = $yy sera incrementé $xx fois
 dataSkit11:	
-	.db $20,$a9, $fe,$05,$45, $fd,$05,$40, $fe,$04,$45, $ff
-	.db $20,$c9, $45,$45,$45, $fd,$07,$45, $fe,$04,$45, $ff
-	.db $20,$e9, $fe,$04,$45, $fd,$07,$4c, $45,$45,$45, $ff
-	.db $21,$09, $45,$45,$45, $fd,$08,$53, $45,$45,$45, $ff
-	.db $21,$29, $fe,$04,$45, $fd,$07,$5b, $45,$45,$45, $ff
-	.db $21,$49, $fe,$05,$45, $fd,$06,$62, $45,$45,$45, $ff
-	.db $21,$69, $fe,$06,$45, $fd,$07,$69, $45, $ff
-	.db $21,$89, $fe,$07,$45, $fd,$06,$70, $45, $ff
-	.db $21,$a9, $fe,$07,$45, $fd,$07,$77, $ff
-	.db $21,$c9, $fe,$07,$45, $fd,$07,$7e, $ff;
+	.db $20,$89, $fe,$05,$45, $fd,$05,$40, $fe,$04,$45, $ff
+	.db $20,$a9, $45,$45,$45, $fd,$07,$45, $fe,$04,$45, $ff
+	.db $20,$c9, $fe,$04,$45, $fd,$07,$4c, $45,$45,$45, $ff
+	.db $20,$e9, $45,$45,$45, $fd,$08,$53, $45,$45,$45, $ff
+	.db $21,$09, $fe,$04,$45, $fd,$07,$5b, $45,$45,$45, $ff
+	.db $21,$29, $fe,$05,$45, $fd,$06,$62, $45,$45,$45, $ff
+	.db $21,$49, $fe,$06,$45, $fd,$07,$69, $45, $ff
+	.db $21,$69, $fe,$07,$45, $fd,$06,$70, $45, $ff
+	.db $21,$89, $fe,$07,$45, $fd,$07,$77, $ff
+	.db $21,$a9, $fe,$07,$45, $fd,$07,$7e, $ff
 
 dataSkit12:
+	.db $24,$89, $fe,$0e,$90, $ff
 	.db $24,$a9, $fe,$0e,$90, $ff
 	.db $24,$c9, $fe,$0e,$90, $ff
-	.db $24,$e9, $fe,$0e,$90, $ff
-	.db $25,$09, $fe,$08,$90, $91, $fe,$05,$90, $ff
-	.db $25,$29, $fe,$06,$90, $92,$93,$94, $fe,$05,$90, $ff
-	.db $25,$49, $fe,$06,$90, $95,$96, $fe,$06,$90, $ff
-	.db $25,$69, $fe,$04,$90, $fd,$05,$97, $fe,$05,$90, $ff
-	.db $25,$89, $fe,$04,$90, $fd,$06,$9c, $fe,$04,$90, $ff;
-	.db $25,$a9, $90,$90,$90, $fd,$04,$a2, $fd,$05,$a5, $90,$90, $ff
-	.db $25,$c9, $90,$90,$90, $aa,$ab,$ac,$9e, $fd,$05,$ad, $90,$90, $ff
+	.db $24,$e9, $fe,$08,$90, $91, $fe,$05,$90, $ff
+	.db $25,$09, $fe,$06,$90, $92,$93,$94, $fe,$05,$90, $ff
+	.db $25,$29, $fe,$06,$90, $95,$96, $fe,$06,$90, $ff
+	.db $25,$49, $fe,$04,$90, $fd,$05,$97, $fe,$05,$90, $ff
+	.db $25,$69, $fe,$04,$90, $fd,$06,$9c, $fe,$04,$90, $ff;
+	.db $25,$89, $90,$90,$90, $fd,$04,$a2, $fd,$05,$a5, $90,$90, $ff
+	.db $25,$a9, $90,$90,$90, $aa,$ab,$ac,$9e, $fd,$05,$ad, $90,$90, $ff
+
+dataSkit13:
+	.db $20,$89, $fe,$0e,$c0, $ff
+	.db $20,$a9, $fe,$05,$c0, $fd,$05,$c1, $fe,$04,$c0, $ff
+	.db $20,$c9, $fe,$05,$c0, $fd,$05,$c6, $fe,$04,$c0, $ff
+	.db $20,$e9, $fe,$05,$c0, $fd,$05,$cb, $fe,$04,$c0, $ff
+	.db $21,$09, $fe,$05,$c0, $fd,$05,$d0, $fe,$04,$c0, $ff
+	.db $21,$29, $fe,$05,$c0, $fd,$05,$d5, $fe,$04,$c0, $ff
+	.db $21,$49, $fe,$06,$c0, $fd,$04,$da, $fe,$04,$c0, $ff
+	.db $21,$69, $fe,$05,$c0, $fd,$05,$de, $fe,$04,$c0, $ff
+	.db $21,$89, $fe,$0e,$c0, $ff
+	.db $21,$a9, $fe,$0e,$c0, $ff
+
+skitTextTable:
+	.dw $0000
+	.dw skitText1TablePointer
+
+skitText1TablePointer:
+	.dw textSkit11
+	.dw textSkit12
+	.dw textSkit13
+
+; $ff fin de linge
+; $fe  fin de text   
+; /!\ max 256 par texte                             
+textSkit11:
+	.db $05,$04,$15,$14,$05,$04,$00,$15,$14,$00,$10,$05,$12,$13,$10,$09,$03,$09,$01,$14,$09,$13,$09,$13, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$15,$00,$00,$00,$00,$00, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$0e,$01,$14,$15,$00,$00, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$00,$00,$00,$00,$00,$00, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$00,$00,$00,$14,$15,$10,$00, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$00,$00,$00,$00,$00,$00, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$04,$04,$06,$0b,$00,$00, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$00,$00,$00,$00,$00,$00, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$06,$00,$00,$14,$14,$06, $ff
+	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$00,$00,$00,$00,$00,$00, $ff
+	.db $15,$0e,$04,$05,$00, $fe
+
+textSkit12:
+	.db $01,$02,$03,$04,$00,$00,$01,$02,$03,$04,$00,$00,$01,$02,$03,$04,$00,$00,$01,$02,$01,$02,$03,$04, $ff
+	.db $17,$18,$00,$17,$18,$00,$17,$18,$00,$17,$18,$00,$17,$18,$00,$17,$18,$00,$17,$18,$00,$00,$17,$18, $ff
+	.db $19,$1a,$1b,$00,$19,$1a,$1b,$00,$19,$1a,$1b,$00,$19,$1a,$1b,$00,$19,$1a,$1b,$00,$19,$1a,$1b, $ff
+	.db $26,$27,$00,$26,$27,$00,$00,$26,$27,$00,$26,$27,$00,$26,$27,$00,$26,$27,$00,$26,$27,$00,$26,$27, $ff
+	.db $0a,$0b,$0c,$00,$00,$0a,$0b,$0c,$00,$00,$0a,$0b,$0c,$00,$0a,$0b,$0c,$0a,$0b,$0c,$00,$0a,$0b,$0c, $ff
+	.db $15,$16,$17,$00,$15,$16,$17,$00,$15,$16,$17, $ff
+	.db $1b,$1c,$1d,$1e,$1f, $ff
+	.db $06,$07,$08,$09,$00,$00,$06,$07,$08,$09,$00,$00,$06,$07,$08,$09,$00,$06,$07,$08,$09, $fe
+
+textSkit13:
+	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$10,$09,$05,$12,$12,$05,$00,$10,$01, $ff
+	.db $0c,$0d,$01,$04,$00,$10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$10,$09,$05,$12, $ff
+	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$10,$09,$05,$12,$12,$05,$ff
+	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$10,$09,$05,$12,$12,$05,$ff
+	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$00,$10,$09,$05,$12,$12,$05, $ff
+	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$10,$09,$05,$12,$12,$05,$ff
+	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$00,$10,$09,$05,$12,$12,$05, $fe
+
 
 
 
@@ -228,7 +286,7 @@ Reset2:
 
 	; 804C
 	; $06 = nombre de ligne
-	lda #$0B
+	lda #$09
 	sta $06
 	ldx #$ff
 	
@@ -293,11 +351,22 @@ Reset2:
 			dec miscCounter
 			bne .startFlickering
 
+	; On supprime le press start
+	lda #$2a
+	sta PPUADDR
+	lda #$ca
+	sta PPUADDR
+	ldx #$c
+	.loopEraseStart:
+		lda #0
+		sta PPUDATA
+		dex
+		bpl .loopEraseStart
+
 	; init stage 1
 	lda #1
 	sta stageId
-	;lda #$11       ; charge bank 11
-	;jsr BankSwitch
+
 
 ; Scénette de début de stage
 SkitStage:
@@ -306,7 +375,7 @@ SkitStage:
 
 	; Charge tiles pour les skits en RAM
 	;   stageId est déjà setté
-	lda #1
+	lda stageId
 	sta pointer+2
 	jsr WriteChr
 
@@ -324,11 +393,15 @@ SkitStage:
 	sta pointer+3
 	jsr SkitStageDrawFrame
 
+	; palette Skit data todo
+	; palette Skit text todo
+	jsr SkitStagePalette
+
 	lda #12
 	sta saveBank
 	ldy stageId
 
-	; charche title dans les deux Nametables	
+	; Charge title dans les deux Nametables	
 	lda #0
 	sta $03 ; init save Y
 	sta $06 ; init position courante ligne
@@ -357,7 +430,10 @@ SkitStage:
 		sta $03; reset Y
 		dec $0c ; charge skit 0 namateble 20xx
 		bpl .loopDataTile
-
+	
+	; init skitText
+	lda #0 ; id skitTable (ex: textSkit11 = 0)
+	sta $03
 
 	; Turn on PPU
 	lda PPU2000value
@@ -365,18 +441,193 @@ SkitStage:
 	sta PPU2000value
 	sta PPUCTRL
 
-
+	jsr SkitText
+	; todo next play game
 	.newFrame:	
 	jsr NextFrame
-	
 	jmp .newFrame
+	rts
+
+SkitStagePalette:
+	lda #$23
+	sta PPUADDR
+	lda #$E1
+	sta PPUADDR
+
+	ldx #$60
+	.loop:
+		lda #$00
+		sta PPUDATA
+		dex
+		bpl .loop
+	rts
+
+SkitText:
+	lda #03
+	sta $0d  ; nb skit
+	lda #$22 ; high
+	sta $08  ;     current
+	sta $04  ;     save
+	lda #$24 ; low
+	sta $09  ;     current
+	sta $05  ;     save
+
+	.start:
+		lda #$00
+		sta $0a
+	.loopDrawLetter:
+	lda #$05
+	sta miscCounter ; Une lettre toutes les 5 frames
+
+	.decMisCounter:
+		jsr NextFrame
+		dec miscCounter
+		beq .endDecMisCounter
+		bne .decMisCounter
+	.endDecMisCounter:
+
+	jsr WriteSkitText
+	
+	cmp #$ff
+	beq .newLine
+	cmp #$fe
+	beq .change
+	sta ppuTransferRawBuf
+	lda $08
+	sta ppuTransferRawAddr
+	lda $09
+	sta ppuTransferRawAddr+1
+	inc $09
+	bne .incPpuTransferRawSize
+	inc $08
+	.incPpuTransferRawSize:
+		inc ppuTransferRawSize
+		inc $0a
+		jmp .loopDrawLetter ; on réaffiche une lettre
+
+	.newLine:
+		clc
+		lda $05 ; Get low
+		adc #32 ; Add 32
+		sta $05 ; save low
+		sta $09 ; current low
+		lda $04
+		adc #0  ; Ajout du carry s'il est setté
+		sta $04 ; save High
+		sta $08 ; current high
+		inc $0a
+		jmp .loopDrawLetter
+
+	.change:
+		dec $0d
+		beq .end
+		lda $0d
+		cmp #$01
+		bne .wait
+		jsr SkitTextNt0
+		lda #$02 ; 3ème texte
+		sta $03
+		bne .handlePPU
+	; On attend un peu
+	.wait:
+		jsr NextFrame
+		dec miscCounter
+		beq .handlePPU
+		bne .wait
+	; Change de NT
+	.handlePPU: 
+		lda PPU2000value
+		eor #01
+		sta PPU2000value
+		sta PPUCTRL
+		and #01
+		bne .nt24
+		; init skip 3 sur NT20
+		lda #$22 ; high
+		sta $08  ;     current
+		sta $04  ;     save
+		lda #$24 ; low
+		sta $09  ;     current
+		sta $05  ;     save
+		jmp .start
+		; Init skip 2 sur NT24	
+	.nt24:
+		inc $03 ; 2ème texte
+		lda #$26 ; high
+		sta $08  ;     current
+		sta $04  ;     save
+		lda #$24 ; low
+		sta $09  ;     current
+		sta $05  ;     save
+		jmp .start
+	.end:	
+		rts
+
+SkitTextNt0:
+	; charge title dans les deux Nametables	
+	lda #0
+	sta $03 ; init save Y
+	sta $06 ; init position courante ligne
+	sta $08 ; init diver (loop i repeatData ou inc data incData)
+	lda #02
+	sta $0c ; charge skit 1 nametable 24xx
+	lda #$0a
+	sta $07
+
+	.loopDataTile:
+		jsr NextFrame
+		jsr WriteSkitChr
+		lda $08
+		cmp #$ff
+		bne .loopDataTile
+		lda #0
+		sta $08
+		dec $07
+		bne .loopDataTile
+
+	; todo delete text
+	
+	; INIT
+	lda #$22 ; high ppuaddr
+	sta $01
+	lda #$00 ; low ppuaddr
+	sta $02
+	
+	lda #112 ; nombre de tour pour tout erase
+	sta $03
+
+	.loopText:
+		jsr NextFrame
+		; PpuTransferRawAddr
+		lda $01
+		sta ppuTransferRawAddr
+		lda $02
+		sta ppuTransferRawAddr+1
+		; DATA
+		ldy #$00 ; On erase 4 tiles par frame
+		.loopDataText:
+			lda #00
+			sta ppuTransferRawBuf, y
+			inc ppuTransferRawSize
+			inc $02
+			bne .next
+			inc $01
+			.next:
+			iny
+			cpy #$04
+			bne .loopDataText
+
+		dec $03
+		bne .loopText
+
+
 	rts
 
 SkitStageDrawFrame:
 	ldy #01
 	lda pointer+2
 	sta PPUADDR
-	lda #$88
+	lda #$68
 	sta PPUADDR
 	lda #$35
 	sta PPUDATA
@@ -391,7 +642,7 @@ SkitStageDrawFrame:
 
 	lda pointer+3
 	sta PPUADDR
-	lda #$E8
+	lda #$c8
 	sta PPUADDR	
 	lda #$32
 	sta PPUDATA
@@ -410,7 +661,7 @@ SkitStageDrawFrame:
 	sta PPUCTRL
 	lda pointer+2
 	sta PPUADDR
-	lda #$A8
+	lda #$88
 	sta PPUADDR
 	ldx #$09
 	lda #$31
@@ -421,7 +672,7 @@ SkitStageDrawFrame:
 
 	lda pointer+2
 	sta PPUADDR
-	lda #$B7
+	lda #$97
 	sta PPUADDR
 	ldx #$09
 	lda #$30
@@ -438,17 +689,15 @@ SkitStageDrawFrame:
 	rts
 
 dataTitle:
-	.db $20,$CE, $30, $FF
-	.db $20,$EA, $31,$32,$33,$00,$34, $FF
-	.db $21,$0A, $36,$37,$38,$39,$3a,$00,$00,$00,$3b, $FF 
-	.db $21,$29, $3c,$3d,$3e,$3f,$40,$00,$00,$00,$86,$41,$42, $FF
-	.db $21,$4B, $45,$00,$46,$00,$47,$48,$49,$4a,$4b,$4c, $FF
-	.db $21,$6A, $4d,$4e,$4f,$50,$51,$52,$53,$54,$55,$56,$57,$58, $FF
-	.db $21,$8B, $59,$5a,$5b,$5c,$5d,$5e,$5f,$60,$61,$62,$63, $FF
-	.db $21,$AB, $64,$65,$00,$66,$67,$68,$69,$00,$6a,$6b,$6c, $FF
-	.db $21,$CC, $6d,$FF
-	.db $21,$D5, $6e,$6f, $FF
-	.db $22,$CA, $10,$12,$05,$13,$13,$00,$00,$13,$14,$01,$12,$14, $FF
+	.db $20,$EB, $32,$33,$00,$34, $ff
+	.db $21,$09, $35,$36,$37,$38,$39,$3a,$00,$00,$00,$3b, $ff
+	.db $21,$29, $3c,$3d,$3e,$3f,$40,$00,$00,$00,$00,$41,$42, $ff
+	.db $21,$49, $43,$44,$45,$00,$46,$00,$47,$48,$49,$4a,$4b,$4c, $ff
+	.db $21,$6A, $4d,$4e,$4f,$50,$51,$52,$53,$54,$55,$56,$57,$58, $ff
+	.db $21,$8B, $59,$5a,$5b,$5c,$5d,$5e,$5f,$60,$61,$62,$63, $ff
+	.db $21,$AB, $64,$65,$00,$66,$67,$68,$69,$00,$6a,$6b,$6c, $ff
+	.db $21,$CC, $6d,$00,$00,$00,$00,$00,$00,$00,$00,$6e,$6f, $ff
+	.db $22,$CA, $10,$12,$05,$13,$13,$00,$00,$13,$14,$01,$12,$14, $FF ; press start
 
 paletteStageTitle:
 	; palette bg
@@ -508,7 +757,7 @@ BankSwitch10:
 	plp
 	
 	rts	
-	
+
 ;
 ; A: 
 ;	low 2 bits = numéro bank
@@ -534,8 +783,40 @@ BankSwitchTile:
 	
 	rts
 	
-;; CHR
+WriteSkitText:
+	jsr BankSwitch10
 
+	; Récupération skitTextTable
+	lda stageId
+	asl a
+	tay
+	lda skitTextTable, y 
+	sta $01
+	iny 
+	lda skitTextTable, Y
+	sta $02
+
+	; récupération skitTextXXTablePointer
+	lda $03
+	asl a
+	tay
+	lda [$01], y
+	sta $06
+	iny
+	lda [$01], y
+	sta $07
+	
+	; récupération data text
+	ldy $0a
+	lda [$06], y
+
+	pha
+	lda saveBank
+	jsr BankSwitch
+	pla
+	rts
+
+;; CHR
 WriteSkitChr:
 	jsr BankSwitch10
 	lda stageId
@@ -559,8 +840,8 @@ WriteSkitChr:
 	sta $0b
 
 	; PPUADDR
-	ldy $03
-	lda $06
+	ldy $03 ; Restore Y
+	lda $06 ; Restore current line pointer
 	bne .restorePPUAddr
 	; Init PPU Addr
 	lda [$0a], y
@@ -838,6 +1119,9 @@ PPUTransferRaw:
 	rts
 
 NextFrame:
+	tya
+	pha
+
 	lda stallTimer
 	bne .checkNmiGfxUpdateDone
 	lda joyPad
@@ -869,6 +1153,8 @@ NextFrame:
 		and joyPad+1
 		sta joyD+1
 		
+	pla
+	tay	
 	rts
 
 ReadJoyPad:
