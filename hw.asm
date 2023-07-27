@@ -463,6 +463,7 @@ SkitStagePalette:
 	rts
 
 SkitText:
+	; INIT
 	lda #03
 	sta $0d  ; nb skit
 	lda #$22 ; high
@@ -476,8 +477,8 @@ SkitText:
 		lda #$00
 		sta $0a
 	.loopDrawLetter:
-	lda #$05
-	sta miscCounter ; Une lettre toutes les 5 frames
+		lda #$05
+		sta miscCounter ; Une lettre toutes les 5 frames
 
 	.decMisCounter:
 		jsr NextFrame
