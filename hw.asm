@@ -77,11 +77,11 @@ OAMDMA  = $4014
 ;-----------
   .bank 2		;01 (1/2)
   .org $8000	
-  .incbin "stage1.chr"
-
+  .incbin "skit1.chr"
+ 
   .bank 3		;01 (2/2)
   .org $A000
-
+  .incbin "stage1.chr"	
 ;-----------
   .bank 4		;02
   .org $8000
@@ -116,20 +116,26 @@ OAMDMA  = $4014
 ;byte #  | what it tells us
 ;--------+----------------
 ;00      | Nombre de bank
-;01      | Nombre de 256 bytes à copier (1 ligne de 16 tiles = 256
+;01      | Nombre de 256 bytes à copier (1 ligne de 16 tiles = 256)
 ;02      | Adresse début de la bank src (offset)
 ;xx      | Info pour les banks suivantes (comme byte 1 et 2)
 ;/!\ offset $04 = une ligne; $40 début bank bg
 
 roomTileTable:
 	.dw roomTileTitleScreen
+	.dw roomTileStage1
 
 roomTileTitleScreen:
 	.db $04      ; Nombre de bank
-	.db $10, $00 ; bank 1. 16 x 256 (16 lignes) adresse 80+00 = 8000 (début bank sprit)
+	.db $10, $00 ; bank 1. 16 x 256 (16 lignes) adresse 80+00 = 8000 (début bank sprite)
 	.db $03, $40 ; bank 2. 3 x 256 (3 lignes) adresse 80+40 = 9000 (début bank bg)
 	.db $04, $4c ; bank 3. 4 x 256 (4 lignes) adresse 80+4c
 	.db $09, $5c ; bank 4. 9 x 256 (9 lignes) adresse 80+5c
+	; FIN RAM $9e2f
+
+roomTileStage1:
+	.db $01
+	.db $20, $81 ; bank1 32 x256 addresse 80+80 = A0000 (on charge tous les sprites + bg)
 
 stikTileTable:
 	.dw $0000
@@ -229,9 +235,6 @@ textSkit13:
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$00,$10,$09,$05,$12,$12,$05, $ff
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$10,$09,$05,$12,$12,$05,$ff
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$00,$10,$09,$05,$12,$12,$05, $fe
-
-
-
 
   .bank 11		;05
   .org $A000
@@ -375,7 +378,7 @@ SkitStage:
 
 	; Charge tiles pour les skits en RAM
 	;   stageId est déjà setté
-	lda stageId
+	lda #$1 ;pour skit
 	sta pointer+2
 	jsr WriteChr
 
@@ -442,7 +445,26 @@ SkitStage:
 	sta PPUCTRL
 
 	jsr SkitText
-	; todo next play game
+	
+InitStage:
+	; Turn off PPU
+	jsr DisableNMIPPU
+
+	lda #12
+	sta saveBank
+
+	; Charge tiles pour le stage
+	;   stageId est déjà setté
+	lda #0 ;pour skit
+	sta pointer+2
+	jsr WriteChr
+
+		; Turn on PPU
+	lda PPU2000value
+	ora #$80
+	sta PPU2000value
+	sta PPUCTRL
+
 	.newFrame:	
 	jsr NextFrame
 	jmp .newFrame
@@ -529,12 +551,15 @@ SkitText:
 		lda #$02 ; 3ème texte
 		sta $03
 		bne .handlePPU
-	; On attend un peu
+	; On attend un peu 126 -> 0
 	.wait:
-		jsr NextFrame
-		dec miscCounter
-		beq .handlePPU
-		bne .wait
+		lda #$80
+		sta miscCounter
+		.decWait:
+			jsr NextFrame
+			dec miscCounter
+			beq .handlePPU
+			bne .decWait
 	; Change de NT
 	.handlePPU: 
 		lda PPU2000value
@@ -620,7 +645,6 @@ SkitTextNt0:
 
 		dec $03
 		bne .loopText
-
 
 	rts
 
@@ -772,7 +796,6 @@ BankSwitchTile:
 	lsr a
 	ora #$80 ; Une bank commence à 8000
 	sta $0b
-	sta echo
 	lda #00
 	sta $0a
 	
@@ -925,9 +948,7 @@ WriteSkitChr:
 	rts
 
 ; Appellé en début de chaque stage + reset
-; pointer  : Low Addr
-; pointer+1 : High Addr
-; pointer+2 : Type skit/chr
+; pointer+2 type 0 = room 1 = skit
 WriteChr:
 	; Récupération de la roomTile pour le stage en cours
 	jsr BankSwitch10
@@ -936,13 +957,13 @@ WriteChr:
 	tay
 	
 	lda pointer+2
-	beq .skit
+	beq .room
 	lda stikTileTable, y
 	sta pointer
 	lda stikTileTable+1, y
 	sta pointer+1
 	bne .next ; inconditionnel branchememnt
-	.skit:
+	.room:
 		lda roomTileTable, y
 		sta pointer
 		lda roomTileTable+1, y
