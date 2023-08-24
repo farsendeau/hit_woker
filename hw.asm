@@ -15,12 +15,13 @@
   .rsset $0000
 echo .rs 1
 pointer .rs 15
+
 PPU2000value .rs 1
 PPU2001Value .rs 1
+
 stageId .rs 1
 currentBank .rs 1
 saveBank .rs 1
-none .rs 2  ; Aussi utilisé pour BankSwitchTile
 stallTimer .rs 1 ; Timer quand il n'y a rien faire
 joyPad    .rs 2 ; Boutons encore pressés 
 joyPadOld .rs 2 
@@ -32,6 +33,24 @@ paletteUpdateDelay .rs 1
 paletteParam .rs 1
 palettePtr .rs 4
 ppuTransferRawSize .rs 1
+tsaPPUtransferSize  .rs 1
+lastRestartPointType .rs 1 ; 0=level beginning; #$xx (todo nombre de niveau) = point A 
+
+currentBeginScreen .rs 1 ; l'écran qui a la première bande
+currentEndScreen .rs 1 ; l'écran qui a la dernière bande
+currentOrderNum .rs 1
+currentRoomPointer .rs 4
+
+scrollPosX      .rs 1
+scrollPosScreen .rs 1
+scrollPosY      .rs 1
+
+forcedInputFlag .rs 1
+forcedInputData .rs 1
+
+objectId .rs 1 ;(RefObjectNumber)
+
+varBF .rs 1
 
   .rsset $0100
 stack .rs 256 ; stack
@@ -40,17 +59,20 @@ stack .rs 256 ; stack
 sprites .rs 256  ;sprite ram
 
   .rsset $0300
-bGPalettes     .rs 16
-spritePalettes .rs 16
-unknownPalettes .rs 16
-
 tsaPPUTransferNTaddress .rs 2
 tsaPPUTransferNTdata    .rs 16
 tsaPPUTransferAttrAddress .rs 2
 tsaPPUTransferAttrData  .rs 1
+tsaPPUTransferRestData .rs 21 ; reste de la data de transfer
+
+bGPalettes     .rs 16
+spritePalettes .rs 16
+unknownPalettes .rs 16
+
+objectPosScreen .rs 20 ; aka. screen ID
 
 ppuTransferRawAddr .rs 2
-ppuTransferRawBuf .rs 126  
+ppuTransferRawBuf .rs 126 
   
 ; PPU const
 PPUCTRL   = $2000
@@ -106,10 +128,33 @@ OAMDMA  = $4014
   .bank 9		;04
   .org $A000
 
-;-----------
+;-----------BANK 5------------------------------------------------------------------------
 
   .bank 10		;05
   .org $8000
+
+
+; HEADER paletteStageXX
+;--------+----------------
+;byte #  | what it tells us
+;--------+----------------
+;1*16    | palette bg
+;2*16    | palette sprite
+;3*16    | palette update
+
+paletteStageTable:
+	.dw paletteStageTitle
+	.dw paletteStage1
+
+paletteStageTitle:
+    .db $0f,$02,$2c,$24, $0f,$03,$15,$33, $0f,$0c,$1b,$2c, $0f,$20,$20,$20
+    .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10
+    .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f
+
+paletteStage1
+    .db $0f,$20,$11,$06, $0f,$10,$0f,$20, $0f,$06,$16,$26, $0f,$09,$19,$29
+    .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10
+    .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f
 
 ; HEADER roomTileTable
 ;--------+----------------
@@ -137,6 +182,7 @@ roomTileStage1:
 	.db $01
 	.db $20, $81 ; bank1 32 x256 addresse 80+80 = A0000 (on charge tous les sprites + bg)
 
+
 stikTileTable:
 	.dw $0000
 	.dw stikTileStage1
@@ -154,8 +200,9 @@ dataSkit1TablePointer:
 	.dw dataSkit12
 	.dw dataSkit13
 
-	; $fe,$xx,$yy = $yy sera répété $xx fois
-	; $fd,$xx,$yy = $yy sera incrementé $xx fois
+; OPCODE:
+;   $fe,$xx,$yy = $yy sera répété $xx fois
+;   $fd,$xx,$yy = $yy sera incrementé $xx fois
 dataSkit11:	
 	.db $20,$89, $fe,$05,$45, $fd,$05,$40, $fe,$04,$45, $ff
 	.db $20,$a9, $45,$45,$45, $fd,$07,$45, $fe,$04,$45, $ff
@@ -201,9 +248,10 @@ skitText1TablePointer:
 	.dw textSkit12
 	.dw textSkit13
 
-; $ff fin de linge
-; $fe  fin de text   
-; /!\ max 256 par texte                             
+; OPCODE:
+;   $ff fin de linge
+;   $fe  fin de text   
+;   /!\ max 256 par texte                             
 textSkit11:
 	.db $05,$04,$15,$14,$05,$04,$00,$15,$14,$00,$10,$05,$12,$13,$10,$09,$03,$09,$01,$14,$09,$13,$09,$13, $ff
 	.db $15,$0e,$04,$05,$00,$0f,$0d,$09,$13,$00,$09,$13,$14,$05,$00,$0e,$01,$14,$15,$00,$00,$00,$00,$00, $ff
@@ -236,9 +284,73 @@ textSkit13:
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$10,$09,$05,$12,$12,$05,$ff
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$00,$10,$09,$05,$12,$12,$05, $fe
 
+;--------------- ROOM ---------------
+
+; ROOM ORDER
+roomOrderTable:
+	.dw $0000
+	.dw roomOrderStage1
+
+roomOrderStage1:
+	.db $00, $01
+
+; SUB ROOM
+roomSubTable:
+	.dw $0000
+	.dw roomSubStage1Table
+
+roomSubStage1Table:
+	.dw RoomSub0Stage1 ; order $00 de roomOrderStage1
+	.dw RoomSub1Stage1 ; prder $01 de roomOrderStage1
+
+RoomSub0Stage1:
+	.db $00, $00, $00, $06, $00, $00, $04, $05
+	.db $00, $00, $00, $06, $08, $00, $04, $05
+	.db $00, $00, $00, $06, $00, $00, $04, $05
+	.db $00, $00, $00, $07, $09, $09, $04, $05
+	.db $00, $00, $03, $06, $00, $03, $04, $05
+	.db $00, $00, $00, $07, $03, $03, $04, $05
+	.db $00, $00, $00, $00, $00, $00, $04, $05
+	.db $00, $00, $00, $06, $00, $00, $04, $05
+
+RoomSub1Stage1:
+	.db $00, $00, $00, $01, $00, $00, $04, $05
+	.db $00, $00, $00, $02, $00, $00, $04, $05
+	.db $00, $00, $00, $00, $00, $04, $05, $05
+	.db $00, $00, $00, $00, $04, $05, $05, $05
+	.db $00, $00, $00, $03, $04, $05, $05, $05
+	.db $00, $00, $00, $00, $00, $00, $00, $00
+	.db $00, $00, $00, $00, $00, $04, $05, $05
+	.db $00, $00, $00, $00, $00, $00, $04, $05
+
+; BLOCK DATA
+roomBlockDataTable:
+	.dw $0000
+	.dw roomBlockDataStage1
+
+roomBlockDataStage1:
+	.db $00, $00, $00, $00
+	.db $00, $00, $08, $00 
+	.db $08, $00, $00, $00
+	.db $10, $10, $14, $14
+	.db $08, $04, $08, $04
+	.db $04, $04, $04, $04 
+	.db $08, $00, $08, $00
+	.db $0c, $0c, $08, $00
+	.db $18, $1c, $20, $24
+	.db $0c, $0c, $00, $00
+
+roomBlockAttrTable:
+	.dw $0000
+	.dw roomBlockAttrStage1
+
+roomBlockAttrStage1:
+	.db $55, $00, $00, $00, $00, $00, $50, $11, $55, $55
+
   .bank 11		;05
   .org $A000
-;-----------
+
+;-----------BANK 6------------------------------------------------------------------
 
   .bank 12		;06
   .org $8000
@@ -275,19 +387,14 @@ Reset2:
 	sta PPU2001Value 
 	
 	; On met les chr en RAM
-	;lda stageId ; ici stage_id = 0 (landing screen)
 	lda #0
+	sta stageId
 	sta pointer+2
 	jsr WriteChr
 	
 	; Init stage palette
-	lda #Low(paletteStageTitle)
-	sta pointer
-	lda #HIGH(paletteStageTitle)
-	sta pointer+1
 	jsr InitStagePalette
 
-	; 804C
 	; $06 = nombre de ligne
 	lda #$09
 	sta $06
@@ -370,7 +477,6 @@ Reset2:
 	lda #1
 	sta stageId
 
-
 ; Scénette de début de stage
 SkitStage:
 	; Turn off PPU
@@ -446,12 +552,8 @@ SkitStage:
 
 	jsr SkitText
 	
-InitStage:
 	; Turn off PPU
 	jsr DisableNMIPPU
-
-	lda #12
-	sta saveBank
 
 	; Charge tiles pour le stage
 	;   stageId est déjà setté
@@ -459,7 +561,37 @@ InitStage:
 	sta pointer+2
 	jsr WriteChr
 
-		; Turn on PPU
+StageBegin:
+	; to do palette
+	jsr InitStagePalette
+
+; Chargement des deux NT
+StageBeginFromDeath:
+	; On commence par la NT 24
+	clc
+	lda lastRestartPointType ; 0 = début stage ; #$0xx (todo nombre de niveau) point A
+	adc stageId
+	pha
+	tax
+	lda firstScreenScreenTable, x
+	sta currentBeginScreen
+	pha
+	lda lastRestartPointType
+	beq .beginningStage
+	; todo point de respawn
+	.beginningStage:
+	lda lastRestartPointType
+	clc
+	adc #$01
+	sta scrollPosScreen
+	jsr ScrollProcess
+	pla
+	sta objectPosScreen
+	jsr ScrollProcess
+
+	pla
+	; todo init du reste data stage
+	; Turn on PPU
 	lda PPU2000value
 	ora #$80
 	sta PPU2000value
@@ -469,6 +601,65 @@ InitStage:
 	jsr NextFrame
 	jmp .newFrame
 	rts
+
+ScrollProcess:
+	sta $05 ; current NT
+	ldx #$ff ; on se place sur la dernière bande
+	stx $04
+	lda #$00
+	sta objectId
+
+	.process:
+		lda #$00
+		sta $0d
+		sta tsaPPUtransferSize
+		
+		lda #$08
+		sta $0c ; on se place sur la dernière colonne (1 colonne = 4 bandes)
+		jsr PrepareDrawBlock
+
+		; Si PPU ON le transfère se fera lors de la NMI
+		lda PPU2000value
+		and #$80
+		beq .doTransfer
+
+		jsr NextFrame
+		jmp .dontTransfer
+	.doTransfer:
+		jsr TsaPPUtransfer
+
+	.dontTransfer:
+		lda $04
+		cmp #$ff
+		bne .process
+
+	rts
+
+PrepareDrawBlock:
+	lda $05
+	bmi .end ; $05 sera 01 puis 00 puis $ff (donc NT 24; 20; XX)
+	cmp currentBeginScreen
+	bcc .end 
+	lda $04 ; Check la bande est un multiple de 4
+	and #$03
+	bne .dontDrawBlock
+	lda $04
+	and #$10
+	beq .drawBlock
+	lda varBF ; Todo ?
+	bne .dontDrawBlock
+	.drawBlock:
+		jsr DrawBlockFromActiveLevelMap
+	.dontDrawBlock:
+		lda $04 ; Si bande = 0 on passe à l'écran prev
+		bne .prevColumn
+		dec $05  ; NT--
+	.prevColumn:
+		dec $04 ; Dec bande--
+		dec $0C ; Dec courante colonne
+		bne PrepareDrawBlock
+	.end:
+		rts
 
 SkitStagePalette:
 	lda #$23
@@ -551,7 +742,7 @@ SkitText:
 		lda #$02 ; 3ème texte
 		sta $03
 		bne .handlePPU
-	; On attend un peu 126 -> 0
+	; On attend un peu 126 -> 0 
 	.wait:
 		lda #$80
 		sta miscCounter
@@ -723,26 +914,24 @@ dataTitle:
 	.db $21,$AB, $64,$65,$00,$66,$67,$68,$69,$00,$6a,$6b,$6c, $ff
 	.db $21,$CC, $6d,$00,$00,$00,$00,$00,$00,$00,$00,$6e,$6f, $ff
 	.db $22,$CA, $10,$12,$05,$13,$13,$00,$00,$13,$14,$01,$12,$14, $FF ; press start
-
-paletteStageTitle:
-	; palette bg
-    .db $0f,$02,$2c,$24, $0f,$03,$15,$33, $0f,$0c,$1b,$2c, $0f,$20,$20,$20
-	; palette sprite
-    .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10
-	; unknown
-    .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f
 		
   .bank 13		;06
   .org $A000
 
-;-----------
+;-----------BANK 7---------------------------------------------------------------------
  
   .bank 14		;07 (1/2 last bank/fixed)
   .org $C000
 
 bankTable: 
 	.db 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
- 
+
+; Initial screen start (à modifier si on ajoute un niveau)
+; par ordre de stage
+firstScreenScreenTable:
+    .db $00, $00 ; début
+    .db $00, $18 ; point A
+
 RESET:
 	SEI          ; disable IRQs
 	CLD          ; disable decimal mode
@@ -1017,6 +1206,16 @@ WriteChr:
 
 ;; PALETTE
 InitStagePalette:
+	jsr BankSwitch10
+	lda stageId
+	asl a
+	tay
+	lda paletteStageTable, y
+	sta $01
+	iny
+	lda paletteStageTable, y
+	sta $02
+
 	; Sprites BG palette
 	lda #$20
 	jsr WritePalette
@@ -1024,11 +1223,14 @@ InitStagePalette:
 	; Copie palette bg/sprite en RAM pour l'update
 	ldy #$2f
 	.loop:
-		lda [pointer], y
+		lda [$01], y
 		sta bGPalettes, y
 		dey
 		bpl .loop
 	
+	lda saveBank
+	jmp BankSwitch
+
 	rts 
 
 ; A = $ssssp000
@@ -1053,7 +1255,7 @@ WritePalette:
 
 	ldy #00
 	.loop:
-		lda [pointer], y ; ($35)
+		lda [$01], y ; ($35)
 		sta PPUDATA
 		iny
 		dex
@@ -1061,8 +1263,7 @@ WritePalette:
 	
 	stx paletteParam ; ici X = 0
 	
-	lda saveBank
-	jmp BankSwitch
+	rts
 
 UpdatePalettes:
 	lda paletteUpdateDelay
@@ -1139,6 +1340,334 @@ PPUTransferRaw:
 		bne .loop
 
 	rts
+
+TsaPPUtransfer:
+	lda tsaPPUtransferSize
+	bne .do
+	; todo manipulation
+	;and #$c0
+	;bne TsaBitManipulation
+	jmp .end
+
+	.do:
+		lda PPU2000value ; PPU inc en 32 (pas en 1)
+		ora #$04
+		sta PPU2000value
+		sta PPUCTRL
+		lda #$02
+		sta $0e
+		lda #HIGH(tsaPPUTransferNTaddress)
+		sta $0f
+
+		lda #LOW(tsaPPUTransferNTaddress)
+	.init:
+		sta $0c
+		tax
+		ldy #$00
+
+		lda #HIGH(tsaPPUTransferNTaddress)
+		sta $0d ; Affect random number
+
+		; check du bord l'écran (bloc x0,y28 a un offset de 0380)
+		; si $300,x et $301,x = #$0380 alors $0c, $0d = #$0100 
+		lda tsaPPUTransferNTaddress+1,x ;on garde le 8 dans highbit
+		and #$80                        ; 
+		ora tsaPPUTransferNTaddress,x   ; on ajoute le 3 du lowbit
+		and #$83                        ; 
+		cmp #$83 ; on test #83          ; et on regarde si c'est bien 83
+		bne .setAddr
+		
+		; sinon
+		lda #01
+		sta $0d
+	.setAddr:
+		lda tsaPPUTransferNTaddress, x
+		sta PPUADDR
+		lda tsaPPUTransferNTaddress+1, x
+		sta PPUADDR
+	.setData:
+		lda [$0e], y
+		sta PPUDATA
+		iny
+		tya
+		and $0d ; si pas 0 on continue
+		bne .setData
+
+		; pour être sur d'avoir la bonne adresse
+		lda $0D
+		cmp #$03
+		beq .loop16
+		iny
+		iny
+	.loop16:
+		tya
+		and #$F
+		beq .setAttr
+		inc tsaPPUTransferNTaddress+1, x ; on passe à la colonne suivante
+		jmp .setAddr ; on repart pour un tour
+	.setAttr:
+		lda tsaPPUTransferAttrAddress, x
+		sta PPUADDR
+		lda tsaPPUTransferAttrAddress+1, x
+		sta PPUADDR
+		lda tsaPPUTransferAttrData, x
+		sta PPUDATA
+
+		dec tsaPPUtransferSize
+		beq .end
+		clc
+		lda $0e
+		adc #$15
+		sta $0e
+		clc
+		lda $0C
+		adc #$15
+		bne .init
+	.end:
+		lda PPU2000value
+		AND #$fb ; on remet la ppu inc by 1
+		sta PPU2000value
+		sta PPUCTRL
+		rts
+
+TsaBitManipulation:
+	rts
+
+
+DrawBlockFromActiveLevelMap:
+	jsr BankSwitch10
+	inc tsaPPUtransferSize
+	jsr CalculateNametableAddress
+
+	; Save des prev data
+	lda $0c ; Courante colonne
+	pha
+	lda $0d ; Offset tsaPPuTransfer
+	pha
+	lda $0e ; Sera écrasé plus loin
+	pha
+	lda $05 ; Courante room
+	pha
+	sta $0c
+	lda $04
+	and #$E0
+	sta $0d
+	lda $04
+	and #$1F
+	asl a
+	asl a
+	asl a
+	sta $0e
+	ldy #$00
+	; Todo collision 
+	jsr CheckCollisionAgainstActives
+	tay
+	; Restore data
+	pla
+	sta $05; Courante room
+	pla 
+	sta $0e ; Sera écrasé plus loin
+	pla
+	sta $0d ; Offset tsaPPuTransfer
+	pla
+	sta $0c ; Courante colonne
+
+	; Set du pointer table
+	;   SubRoom
+	lda stageId 
+	asl a
+	sta $00; save stage id
+	tay
+	lda roomSubTable, y  
+	sta $06
+	lda roomSubTable+1, y
+	sta $07
+
+	; Via roomOrderTable
+	; -> roomOrderStageXX
+	ldy $00 ; restore stage id .dw
+	lda roomOrderTable, y
+	sta $08
+	lda roomOrderTable+1, y
+	sta $09
+
+	; via roomSubStageXTable
+	;  -> RoomSubXStageXX
+	lda $05 ; on va chercher la room à afficher en fonction de l'ordre
+	asl a
+	tay
+	lda [$08], y ; $temp = roomOrderStageX[$05]
+	asl a
+	tya
+	lda [$06], y
+	sta currentRoomPointer
+	iny
+	lda [$06], y
+	sta currentRoomPointer+1
+	
+	lda $04 ; le début du bloc matrice / 4 pour avoir l'id du submatrice
+	lsr a
+	lsr a
+	tay
+	lda [currentRoomPointer], y ; 4x4 blocs
+	
+	pha
+	ldy #$00
+	sty currentRoomPointer+1 ; reset
+	asl a
+	rol currentRoomPointer+1
+	asl a
+	rol currentRoomPointer+1
+	tay
+	pha
+	; block data
+	ldy $00 ; restore stage id
+	lda roomBlockDataTable, y
+	sta currentRoomPointer
+	lda roomBlockDataTable+1, y
+	sta currentRoomPointer+1
+	pla
+	tay
+	jsr Write32x32BlockToBuffer
+	jsr Adjust32x32BlockAddress
+
+	; Palette du bloc
+	ldy $00 ; restore stageId
+	lda roomBlockAttrTable, y
+	sta $06
+	lda roomBlockAttrTable+1, y
+	sta $07
+	pla
+	tay
+	lda [$06], y
+	sta tsaPPUTransferNTdata-2,x
+	inx
+	stx $0d
+
+	lda saveBank
+	jsr BankSwitch
+
+	rts
+
+; If $05 = 1 alors $09,$10 = #$2023 sinon #$2427
+CalculateNametableAddress:
+	ldx #$20 ; ppu à 2023
+	ldy #$23
+
+	lda $05
+	and #$01
+	beq .truc
+	ldx #$24 ; $05 = 1 ppu à 2427
+	ldy #$27
+	.truc:
+	stx $08
+	sty currentRoomPointer+3
+
+	lda #$00
+	sta currentRoomPointer+1
+	; Matrice currentPointer
+	lda $04 ; on se place en haut de la colonne (fc & 1f = 1c)
+	and #$1F
+	asl a  ; *32 donnera la position currente du pointer sur 2o
+	asl a
+	asl a
+	asl a
+	rol currentRoomPointer+1
+	asl a
+	rol currentRoomPointer+1
+	sta currentRoomPointer
+	; PPUADDR
+	lda $04
+	and #$e0
+	lsr a
+	lsr a
+	lsr a
+	ora currentRoomPointer
+	ldx $0d ; offset tsaPPuTransfer
+	sta tsaPPUTransferNTaddress+1, x
+
+	lda $08
+	ora currentRoomPointer+1
+	sta tsaPPUTransferNTaddress, x
+
+	inx
+	inx
+	
+	rts
+
+CheckCollisionAgainstActives:
+	lda forcedInputFlag
+	lda #$00
+	rts
+
+; Transfere 4x4 blocs dans tsaPPUTransferData
+;
+; 0   2   8   A
+;  (0)     (2)
+; 1   3   9   B
+;
+; 4   6   C   E
+;  (1)     (3)
+; 5   7   D   F
+;
+; [16x16] [16x16]
+; 
+; [16x16] [16x16]
+Write32x32BlockToBuffer:
+	lda #$02
+	sta $0e
+	.loopBlockX4:
+		lda #$02
+		sta $0f
+	.loopBlockX2:
+		lda [currentRoomPointer], y
+		clc
+		sta tsaPPUTransferNTaddress, x   ; ici c'est bien de la data qui sera stockée
+		adc #$01
+		sta tsaPPUTransferNTaddress+1, x
+		adc #$01
+		sta tsaPPUTransferNTdata+2, x
+		adc #$01
+		sta tsaPPUTransferNTdata+3, x
+
+		inx
+		inx
+		iny
+		dec $0f
+		bne .loopBlockX2
+
+		inx
+		inx
+		inx
+		inx
+		dec $0e
+		bne .loopBlockX4
+
+	rts
+
+Adjust32x32BlockAddress:
+    lda $04
+    rol a
+
+    pha
+    rol a
+    rol a
+    rol a
+    and #$07
+    sta currentRoomPointer+2
+    pla
+
+    and #$38
+    ora currentRoomPointer+2
+    ora #$C0
+    sta tsaPPUTransferNTaddress+1,x
+	; ici 24 alors que currentRoomPointer+3 devrait etre 27 
+    lda currentRoomPointer+3 
+    sta tsaPPUTransferNTaddress+0,x
+    inx
+    inx
+
+    rts
 
 NextFrame:
 	tya
@@ -1268,7 +1797,6 @@ NMI:
 	ora #$80
 	sta PPU2000value
 	sta PPUCTRL
-	
 	
 	lda #$01
 	sta nmiGfxUpdateDone
