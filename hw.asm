@@ -87,6 +87,12 @@ OAMADDR = $2003 ; Object Attribute Memory
 OAMDATA = $2004
 OAMDMA  = $4014
 
+; Stage Data
+ROOM_BLOCK_DATA    = $b000
+ROOM_BLOCK_PALETTE = $b300
+ROOM_ORDER         = $bC00
+ROOM_POINTER_TABLE = $bC30
+
 ;-----------
   .bank 0		;00 (1/2 first bank/swappable)
   .org $8000
@@ -103,7 +109,52 @@ OAMDMA  = $4014
  
   .bank 3		;01 (2/2)
   .org $A000
-  .incbin "stage1.chr"	
+  .incbin "stage1.chr"
+	; ROOM_BLOCK_DATA 
+	.db $00, $00, $00, $00
+	.db $00, $00, $08, $00 
+	.db $08, $00, $00, $00
+	.db $10, $10, $14, $14
+	.db $08, $04, $08, $04
+	.db $04, $04, $04, $04 
+	.db $08, $00, $08, $00
+	.db $0c, $0c, $08, $00
+	.db $18, $1c, $20, $24
+	.db $0c, $0c, $00, $00
+
+roomBlockDataStage10:
+	.db $00, $00, $00, $06, $00, $00, $04, $05
+	.db $00, $00, $00, $06, $08, $00, $04, $05
+	.db $00, $00, $00, $06, $00, $00, $04, $05
+	.db $00, $00, $00, $07, $09, $09, $04, $05
+	.db $00, $00, $03, $06, $00, $03, $04, $05
+	.db $00, $00, $00, $07, $03, $03, $04, $05
+	.db $00, $00, $00, $00, $00, $00, $04, $05
+	.db $00, $00, $00, $06, $00, $00, $04, $05
+
+roomBlockDataStage11:
+	.db $00, $00, $00, $01, $00, $00, $04, $05
+	.db $00, $00, $00, $02, $00, $00, $04, $05
+	.db $00, $00, $00, $00, $00, $04, $05, $05
+	.db $00, $00, $00, $00, $04, $05, $05, $05
+	.db $00, $00, $00, $03, $04, $05, $05, $05
+	.db $00, $00, $00, $00, $00, $00, $00, $00
+	.db $00, $00, $00, $00, $00, $04, $05, $05
+	.db $00, $00, $00, $00, $00, $00, $04, $05
+
+	; ROOM_BLOCK_PALETTE
+   .org $b300
+	.db $55, $00, $00, $00, $00, $00, $50, $11, $55, $55
+
+	; ROOM_ORDER
+	.org $bc00
+	.db $00, $01
+
+	; ROOM_POINTER_TABLE
+	.org $bC30
+	.dw roomBlockDataStage10
+	.dw roomBlockDataStage11
+
 ;-----------
   .bank 4		;02
   .org $8000
@@ -180,7 +231,8 @@ roomTileTitleScreen:
 
 roomTileStage1:
 	.db $01
-	.db $20, $81 ; bank1 32 x256 addresse 80+80 = A0000 (on charge tous les sprites + bg)
+	;.db $20, $81 ; bank1 32 x256 addresse 80+80 = A0000 (on charge tous les sprites + bg)
+	.db $10, $81 ; bank1 32 x256 addresse 80+80 = A0000 (on charge tous les sprites + bg)
 
 
 stikTileTable:
@@ -284,69 +336,6 @@ textSkit13:
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$10,$09,$05,$12,$12,$05,$ff
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$00,$10,$09,$05,$12,$12,$05, $fe
 
-;--------------- ROOM ---------------
-
-; ROOM ORDER
-roomOrderTable:
-	.dw $0000
-	.dw roomOrderStage1
-
-roomOrderStage1:
-	.db $00, $01
-
-; SUB ROOM
-roomSubTable:
-	.dw $0000
-	.dw roomSubStage1Table
-
-roomSubStage1Table:
-	.dw RoomSub0Stage1 ; order $00 de roomOrderStage1
-	.dw RoomSub1Stage1 ; prder $01 de roomOrderStage1
-
-RoomSub0Stage1:
-	.db $00, $00, $00, $06, $00, $00, $04, $05
-	.db $00, $00, $00, $06, $08, $00, $04, $05
-	.db $00, $00, $00, $06, $00, $00, $04, $05
-	.db $00, $00, $00, $07, $09, $09, $04, $05
-	.db $00, $00, $03, $06, $00, $03, $04, $05
-	.db $00, $00, $00, $07, $03, $03, $04, $05
-	.db $00, $00, $00, $00, $00, $00, $04, $05
-	.db $00, $00, $00, $06, $00, $00, $04, $05
-
-RoomSub1Stage1:
-	.db $00, $00, $00, $01, $00, $00, $04, $05
-	.db $00, $00, $00, $02, $00, $00, $04, $05
-	.db $00, $00, $00, $00, $00, $04, $05, $05
-	.db $00, $00, $00, $00, $04, $05, $05, $05
-	.db $00, $00, $00, $03, $04, $05, $05, $05
-	.db $00, $00, $00, $00, $00, $00, $00, $00
-	.db $00, $00, $00, $00, $00, $04, $05, $05
-	.db $00, $00, $00, $00, $00, $00, $04, $05
-
-; BLOCK DATA
-roomBlockDataTable:
-	.dw $0000
-	.dw roomBlockDataStage1
-
-roomBlockDataStage1:
-	.db $00, $00, $00, $00
-	.db $00, $00, $08, $00 
-	.db $08, $00, $00, $00
-	.db $10, $10, $14, $14
-	.db $08, $04, $08, $04
-	.db $04, $04, $04, $04 
-	.db $08, $00, $08, $00
-	.db $0c, $0c, $08, $00
-	.db $18, $1c, $20, $24
-	.db $0c, $0c, $00, $00
-
-roomBlockAttrTable:
-	.dw $0000
-	.dw roomBlockAttrStage1
-
-roomBlockAttrStage1:
-	.db $55, $00, $00, $00, $00, $00, $50, $11, $55, $55
-
   .bank 11		;05
   .org $A000
 
@@ -390,6 +379,8 @@ Reset2:
 	lda #0
 	sta stageId
 	sta pointer+2
+	lda #$0
+	sta pointer+3
 	jsr WriteChr
 	
 	; Init stage palette
@@ -486,6 +477,8 @@ SkitStage:
 	;   stageId est déjà setté
 	lda #$1 ;pour skit
 	sta pointer+2
+	lda #$0
+	sta pointer+3
 	jsr WriteChr
 
 	; Charge 2 Nametables en PPU (2 skits)
@@ -557,8 +550,10 @@ SkitStage:
 
 	; Charge tiles pour le stage
 	;   stageId est déjà setté
-	lda #0 ;pour skit
+	lda #$0 ;pour skit
 	sta pointer+2
+	lda #$1
+	sta pointer+3
 	jsr WriteChr
 
 StageBegin:
@@ -978,7 +973,7 @@ BankSwitch10:
 ;	high 6 bits = offset (ex 0x38 + donnera 0xB8 car 80+38)
 ;
 ; Modifie X mais pas A ou Y
-BankSwitchTile:
+BankSwitchStage:
 	pha
 	and #$fc
 	lsr a
@@ -1157,17 +1152,24 @@ WriteChr:
 		sta pointer
 		lda roomTileTable+1, y
 		sta pointer+1
-	
+
 	.next:
 	ldy #0
 	lda [pointer], y ; Nombre de bank qu'il faut récupérer
 	sta $08
 	
-	lda #00
-	sta PPUADDR
-	sta PPUADDR
-	sta $09
-	inc $09
+	lda pointer+3 ; si pointer = 1 on commentce à 1000
+	bne .setPPU1000
+	lda #00       ; sinon à zéro
+	beq .setPPU   ; inconditionnel branchement
+	.setPPU1000:
+		lda #$10
+	.setPPU:
+		sta PPUADDR
+		lda #$00
+		sta PPUADDR
+		sta $09
+		inc $09
 	
 	.loopRetrieveBank:
 		jsr BankSwitch10
@@ -1181,7 +1183,7 @@ WriteChr:
 		tay
 		iny
 		lda [pointer], y ; Bank ou se trouve les tiles
-		jsr BankSwitchTile
+		jsr BankSwitchStage
 		
 		.loop256Bytes:
 				ldy #00 
@@ -1435,7 +1437,8 @@ TsaBitManipulation:
 
 
 DrawBlockFromActiveLevelMap:
-	jsr BankSwitch10
+	lda stageId
+	jsr BankSwitchStage
 	inc tsaPPUtransferSize
 	jsr CalculateNametableAddress
 
@@ -1472,37 +1475,13 @@ DrawBlockFromActiveLevelMap:
 	pla
 	sta $0c ; Courante colonne
 
-	; Set du pointer table
-	;   SubRoom
-	lda stageId 
-	asl a
-	sta $00; save stage id
-	tay
-	lda roomSubTable, y  
-	sta $06
-	lda roomSubTable+1, y
-	sta $07
-
-	; Via roomOrderTable
-	; -> roomOrderStageXX
-	ldy $00 ; restore stage id .dw
-	lda roomOrderTable, y
-	sta $08
-	lda roomOrderTable+1, y
-	sta $09
-
-	; via roomSubStageXTable
-	;  -> RoomSubXStageXX
-	lda $05 ; on va chercher la room à afficher en fonction de l'ordre
+	ldy $05 ; on va chercher la room à afficher en fonction de l'ordre
+	lda ROOM_ORDER, y ;
 	asl a
 	tay
-	lda [$08], y ; $temp = roomOrderStageX[$05]
-	asl a
-	tya
-	lda [$06], y
+	lda ROOM_POINTER_TABLE, y
 	sta currentRoomPointer
-	iny
-	lda [$06], y
+	lda ROOM_POINTER_TABLE+1, y
 	sta currentRoomPointer+1
 	
 	lda $04 ; le début du bloc matrice / 4 pour avoir l'id du submatrice
@@ -1519,27 +1498,17 @@ DrawBlockFromActiveLevelMap:
 	asl a
 	rol currentRoomPointer+1
 	tay
-	pha
-	; block data
-	ldy $00 ; restore stage id
-	lda roomBlockDataTable, y
+	; bloc 
+	lda #LOW(ROOM_BLOCK_DATA)  ;ROOM_BLOCK_DATA $b000
 	sta currentRoomPointer
-	lda roomBlockDataTable+1, y
+	lda #HIGH(ROOM_BLOCK_DATA)
 	sta currentRoomPointer+1
-	pla
-	tay
 	jsr Write32x32BlockToBuffer
 	jsr Adjust32x32BlockAddress
-
 	; Palette du bloc
-	ldy $00 ; restore stageId
-	lda roomBlockAttrTable, y
-	sta $06
-	lda roomBlockAttrTable+1, y
-	sta $07
 	pla
 	tay
-	lda [$06], y
+	lda ROOM_BLOCK_PALETTE, y
 	sta tsaPPUTransferNTdata-2,x
 	inx
 	stx $0d
