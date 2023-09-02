@@ -38,7 +38,7 @@ lastRestartPointType .rs 1 ; 0=level beginning; #$xx (todo nombre de niveau) = p
 
 currentBeginScreen .rs 1 ; l'écran qui a la première bande
 currentEndScreen .rs 1 ; l'écran qui a la dernière bande
-currentOrderNum .rs 1
+currentOrderNum .rs 1 ; l'ordre d'affichage de la room
 currentRoomPointer .rs 4
 
 scrollPosX      .rs 1
@@ -48,9 +48,26 @@ scrollPosY      .rs 1
 forcedInputFlag .rs 1
 forcedInputData .rs 1
 
+previousEnemyIndex .rs 1
+currentEnemyIndex .rs 1
+
+weaponSelect .rs 1
+bossCurrentStrategy .rs 1
+
+totalObjects .rs 1
 objectId .rs 1 ;(RefObjectNumber)
 
-varBF .rs 1
+meters .rs 5 ; Life
+drawMetersFlag .rs 1
+
+playerBlinkState .rs 1 ; Timer: 0 = no blinking, #$6f = max
+bossBlinkState .rs 1
+
+screenMovedFlag .rs 1
+
+varBF .rs 1 ; todo je ne sais pas à quoi ça sert
+var7B .rs 1
+var22 .rs 1 ; un rapport avec posobjet ?
 
   .rsset $0100
 stack .rs 256 ; stack
@@ -69,7 +86,12 @@ bGPalettes     .rs 16
 spritePalettes .rs 16
 unknownPalettes .rs 16
 
+objectSpriteNum .rs 20
 objectPosScreen .rs 20 ; aka. screen ID
+objectPosX      .rs 20
+objectPosY      .rs 20
+objectLifeMeter .rs 20
+objectFireDelay .rs 20
 
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
@@ -92,6 +114,11 @@ ROOM_BLOCK_DATA    = $b000
 ROOM_BLOCK_PALETTE = $b300
 ROOM_ORDER         = $bC00
 ROOM_POINTER_TABLE = $bC30
+ROOM_LAYOUT_TABLE  = $bc70 ; size = #$48
+
+; Sprite
+SPRITE_TABLE = $0200 
+CURRENT_SPRITE_DATA = $0204 ;(200-203 sprite 0)
 
 ;-----------
   .bank 0		;00 (1/2 first bank/swappable)
@@ -109,7 +136,10 @@ ROOM_POINTER_TABLE = $bC30
  
   .bank 3		;01 (2/2)
   .org $A000
-  .incbin "stage1.chr"
+  .incbin "stage1.chr" ; Supprimer 1o via hex editor pour arrive à $B000
+
+  ; Si change une plage d'addr (ex: size) il faut aussi change l'alias
+  .org $B000
 	; ROOM_BLOCK_DATA 
 	.db $00, $00, $00, $00
 	.db $00, $00, $08, $00 
@@ -154,6 +184,11 @@ roomBlockDataStage11:
 	.org $bC30
 	.dw roomBlockDataStage10
 	.dw roomBlockDataStage11
+
+	; ROOM_LAYOUT_TABLE
+	org $bc70
+	.db $00, $83, $80, $80, $80, $82, $80, $80, $80, $42, $40, $40, $21, $22, $00 
+	.db $86, $80, $41, $40, $81, $80, $20, $00
 
 ;-----------
   .bank 4		;02
@@ -575,6 +610,7 @@ StageBeginFromDeath:
 	beq .beginningStage
 	; todo point de respawn
 	.beginningStage:
+	; update Background tiles
 	lda lastRestartPointType
 	clc
 	adc #$01
@@ -583,19 +619,86 @@ StageBeginFromDeath:
 	pla
 	sta objectPosScreen
 	jsr ScrollProcess
-
+	; update enemi
 	pla
-	; todo init du reste data stage
-	; Turn on PPU
+	; Ici ça plante
+	tax ; x = stageId
+	lda firstScreenEnemyPointer, x
+	sta previousEnemyIndex
+	clc
+	adc #$01
+	sta currentEnemyIndex
+	; update room
+	lda firstScreenScreenTable, x
+	sta currentOrderNum
+	tay
+	jsr RoomLayoutLoadRoomNum
+
+	and #$1F
+	clc
+	adc currentBeginScreen
+	sta currentEndScreen
+	lda objectPosScreen
+	sta scrollPosScreen
+	lda #$00
+	sta scrollPosX
+	sta weaponSelect
+	sta bossCurrentStrategy
+	sta objectLifeMeter + 1
+
+	; todo ici voir pour remplir les armes
+
+	lda lastRestartPointType
+	beq .next
+	; todo truc à faire pour le checkpoint 
+
+	.next:
+
+	ldy #$00
+	ldx #$40
+	jsr HideSprites
+	lda #$20 ; max 20 objets
+	sta totalObjects
+	jsr ForgetRoomObjects
+
+	; Init player coordonnées
+	lda #$80
+	sta objectPosX
+	sta var22 ; posX Current du player ?
+	lda #$50 ; Todo posY à modifier
+	sta objectPosY
+
+
+	
+	; play sound stage
+
+	lda stageId
+	bne .noEndStage
+
+	.noEndStage:
+	; Max life
+	lda #$1c
+	sta meters
+	lda #$00
+	sta playerBlinkState
+	sta objectSpriteNum ; player stand
+	lda #$01
+	sta screenMovedFlag
+	;jsr UpdateGraphics
+		; Turn on PPU
 	lda PPU2000value
 	ora #$80
 	sta PPU2000value
 	sta PPUCTRL
-
-	.newFrame:	
+	sta nmiGfxUpdateDone
 	jsr NextFrame
-	jmp .newFrame
-	rts
+
+MainLoop:
+
+	jsr UpdateGraphics
+	jsr NextFrame
+
+	JMP MainLoop
 
 ScrollProcess:
 	sta $05 ; current NT
@@ -899,6 +1002,52 @@ SkitStageDrawFrame:
 
 	rts
 
+;
+; Y = starting sprite index
+; X = Nombre de sprite consécutif à caché
+;
+HideSprites:
+	lda #$f8 ; est un sprite noir
+	.loop:
+		sta $0200, y
+		iny
+		iny
+		iny
+		iny
+		dex
+		bne .loop
+
+	rts
+
+ForgetRoomObjects:
+	ldx #$1f ; tous les objets sauf le perso
+	lda #$f8 ; En dehors de l'écran
+
+	.loop:
+		sta objectPosY+1, x
+		dex
+		bpl .loop
+
+	LDX #$0f
+	LDA #$ff
+	.loop2:
+		sta var7B, x
+		dex
+		bpl .loop2
+
+	rts	
+
+; Initial screen start (à modifier si on ajoute un niveau)
+; par ordre de stage
+firstScreenScreenTable:
+    .db $00, $00 ; début
+    .db $00, $18 ; point A
+
+firstScreenEnemyPointer: 
+    .byte $00,$FF; nombre d'enemie sur l'écran de dépare
+    ; checkpoint
+    .byte $00,$11
+
 dataTitle:
 	.db $20,$EB, $32,$33,$00,$34, $ff
 	.db $21,$09, $35,$36,$37,$38,$39,$3a,$00,$00,$00,$3b, $ff
@@ -920,12 +1069,6 @@ dataTitle:
 
 bankTable: 
 	.db 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
-
-; Initial screen start (à modifier si on ajoute un niveau)
-; par ordre de stage
-firstScreenScreenTable:
-    .db $00, $00 ; début
-    .db $00, $18 ; point A
 
 RESET:
 	SEI          ; disable IRQs
@@ -1435,6 +1578,7 @@ TsaPPUtransfer:
 TsaBitManipulation:
 	rts
 
+;---------------- ROOM-----------------
 
 DrawBlockFromActiveLevelMap:
 	lda stageId
@@ -1638,6 +1782,139 @@ Adjust32x32BlockAddress:
 
     rts
 
+RoomLayoutLoadRoomNum:
+	lda stageId
+	jsr BankSwitchStage
+	lda ROOM_LAYOUT_TABLE+1, y
+
+	lda saveBank
+	jsr BankSwitch
+
+	rts
+
+
+;-------Graphics-----------
+UpdateGraphics:
+    ; hide tous les sprites
+	ldy #$00
+	sty $0d ;  save spriteCounter
+	ldx #$40
+	jsr HideSprites
+
+	lda frameCounter
+	and #$01
+	;beq .oddFrame
+	; fram impaire
+	jsr DrawWeaponAndMetters
+
+	; frame paire
+	.oddFrame:
+
+	.end:
+		rts
+
+DrawWeaponAndMetters:
+	; Life
+	ldy $0d ; restore spriteCounter
+	lda drawMetersFlag
+	bmi .end
+	lda #$fe ; index tiles vides
+	sta $02
+	lda #$fA ; index tiles pleines
+	sta $03
+	lda #$01 ; sprite attr
+	sta $06
+	lda #$08 ; X coord
+	sta $04
+	lda #$48 ; Y coord
+	sta $05
+	lda meters
+	jsr DrawMeter
+
+	; weapon
+	lda weaponSelect
+	
+	rts
+
+;
+; A = meter valeur (#$1c max)
+; $04,$05 = x,y coord du point le plus bas de la barre de vie
+; Y = index dans la page de sprite
+; $02 = index empty tuile aussi utiliser pour les fraction (3/4, 1/2, 1/4, vide)
+; $03 = index tuile pleine
+;
+DrawMeter:
+	pha 	
+	lsr a
+	lsr a
+	sta $07
+	pla
+	and #$03  ; Fraction (3/4, 1/2, 1/4)
+	sta $08
+
+	sec     
+	lda $02
+	sbc $08
+	sta $08
+
+	ldx $00
+	.loop:
+		; if sprite# < numéro full bloc alors tile#=$03
+		; else if sprite# = fraction bloc alors tile#=$08
+		; else tile# = $02 empty
+		cpx $07       ; vide ? (en fonction de x)
+		bcs .noEmpty
+		lda $03       ; pleine ?
+		bne .setTile
+		.noEmpty:
+			bne .empty 
+			lda $08		; fraction 
+			bne .setTile
+		.empty:
+			lda $02
+		.setTile:
+			sta $09
+			jsr WriteSprite
+			inx
+			cpx #$07
+			bne .loop 
+	rts
+
+;
+; $04,$05 = x,y coord du sprite
+; $09 = tuile id
+; $06 = sprite attr
+;   Y = index du sprite dans la page 
+WriteSprite:
+	; X
+	lda $04 
+	sta CURRENT_SPRITE_DATA+3, y
+	; Tuile id
+	lda $09
+	sta CURRENT_SPRITE_DATA+1, y
+	; Attr
+	lda $06
+	sta CURRENT_SPRITE_DATA+2, y
+	; Y
+	lda $05
+	sta CURRENT_SPRITE_DATA, y
+	cpy #$f8
+	beq .end
+	iny
+	iny
+	iny
+	iny
+	cmp #$F8 
+	beq .end
+	sec
+	sbc #$08
+	sta $05
+
+	.end:
+		rts
+
+;-------FRAME---------------
+
 NextFrame:
 	tya
 	pha
@@ -1676,6 +1953,7 @@ NextFrame:
 	pla
 	tay	
 	rts
+;----------------JoyPad---------------------
 
 ReadJoyPad:
 	ldx #$01
@@ -1698,7 +1976,9 @@ ReadJoyPad:
 			bpl .loopButton
 		
 	rts
-	
+
+;-----------PPU----------------
+
 ; NMI PPU seront réactivés par NMI	
 DisableNMIPPU:
 	lda PPU2000value
@@ -1712,6 +1992,8 @@ DisableNMIPPU:
 	sta PPUMASK 
 	
 	rts
+
+;-------------NMI---------------
 
 NMI:
 	pha  ; save de a sur la pile
@@ -1787,10 +2069,6 @@ NMI:
 	
 	RTI 	
 
-mainLoop:	
-	inc $0F
-	JMP mainLoop
-	
 ;-------------------	
   .bank 15		;07 (2/2 last bank/fixed)
   .org $E000
