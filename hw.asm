@@ -110,11 +110,12 @@ OAMDATA = $2004
 OAMDMA  = $4014
 
 ; Stage Data
-ROOM_BLOCK_DATA    = $b000
-ROOM_BLOCK_PALETTE = $b300
-ROOM_ORDER         = $bC00
-ROOM_POINTER_TABLE = $bC30
-ROOM_LAYOUT_TABLE  = $bc70 ; size = #$48
+ROOM_BLOCK_DATA      = $b000
+ROOM_BLOCK_PALETTE   = $b300
+ROOM_ORDER           = $bC00
+ROOM_POINTER_TABLE   = $bC30
+ROOM_LAYOUT_TABLE    = $bc70 ; size = #$48
+ROOM_SPRITE_PALETTE1 = $bca0 
 
 ; Sprite
 SPRITE_TABLE = $0200 
@@ -128,7 +129,10 @@ CURRENT_SPRITE_DATA = $0204 ;(200-203 sprite 0)
 
   .bank 1		;00 (2/2 first bank/swappable)
   .org $A000
-
+  .org $bca0
+	.db $0f,$02,$2c,$24, $0f,$03,$15,$33, $0f,$0c,$1b,$2c, $0f,$20,$20,$20
+    .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10
+    .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f	
 ;-----------
   .bank 2		;01 (1/2)
   .org $8000	
@@ -172,24 +176,29 @@ roomBlockDataStage11:
 	.db $00, $00, $00, $00, $00, $04, $05, $05
 	.db $00, $00, $00, $00, $00, $00, $04, $05
 
-	; ROOM_BLOCK_PALETTE
-   .org $b300
+  ; ROOM_BLOCK_PALETTE
+  .org $b300
 	.db $55, $00, $00, $00, $00, $00, $50, $11, $55, $55
 
-	; ROOM_ORDER
-	.org $bc00
+  ; ROOM_ORDER
+  .org $bc00
 	.db $00, $01
 
-	; ROOM_POINTER_TABLE
-	.org $bC30
+  ; ROOM_POINTER_TABLE
+  .org $bC30
 	.dw roomBlockDataStage10
 	.dw roomBlockDataStage11
 
-	; ROOM_LAYOUT_TABLE
-	org $bc70
+  ; ROOM_LAYOUT_TABLE
+  .org $bc70
 	.db $00, $83, $80, $80, $80, $82, $80, $80, $80, $42, $40, $40, $21, $22, $00 
 	.db $86, $80, $41, $40, $81, $80, $20, $00
-
+	
+  ; ROOM_SPRITE_PALETTE1
+  .org $bca0
+	.db $0f,$20,$11,$06, $0f,$10,$0f,$20, $0f,$06,$16,$26, $0f,$09,$19,$29 ; bg
+    .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10 ; sprite
+    .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f ; update
 ;-----------
   .bank 4		;02
   .org $8000
@@ -218,29 +227,6 @@ roomBlockDataStage11:
 
   .bank 10		;05
   .org $8000
-
-
-; HEADER paletteStageXX
-;--------+----------------
-;byte #  | what it tells us
-;--------+----------------
-;1*16    | palette bg
-;2*16    | palette sprite
-;3*16    | palette update
-
-paletteStageTable:
-	.dw paletteStageTitle
-	.dw paletteStage1
-
-paletteStageTitle:
-    .db $0f,$02,$2c,$24, $0f,$03,$15,$33, $0f,$0c,$1b,$2c, $0f,$20,$20,$20
-    .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10
-    .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f
-
-paletteStage1
-    .db $0f,$20,$11,$06, $0f,$10,$0f,$20, $0f,$06,$16,$26, $0f,$09,$19,$29
-    .db $0f,$21,$21,$13, $0f,$16,$27,$37, $0f,$16,$27,$37, $0f,$30,$27,$10
-    .db $0f,$02,$2c,$24, $0f,$15,$15,$15, $0f,$15,$15,$15, $0f,$0f,$0f,$0f
 
 ; HEADER roomTileTable
 ;--------+----------------
@@ -1351,14 +1337,15 @@ WriteChr:
 
 ;; PALETTE
 InitStagePalette:
-	jsr BankSwitch10
+	;jsr BankSwitch10
 	lda stageId
-	asl a
-	tay
-	lda paletteStageTable, y
+	jsr BankSwitchStage
+	;asl a
+	;tay
+	lda #LOW(ROOM_SPRITE_PALETTE1)
 	sta $01
-	iny
-	lda paletteStageTable, y
+
+	lda #HIGH(ROOM_SPRITE_PALETTE1)
 	sta $02
 
 	; Sprites BG palette
@@ -1817,7 +1804,7 @@ DrawWeaponAndMetters:
 	; Life
 	ldy $0d ; restore spriteCounter
 	lda drawMetersFlag
-	bmi .end
+	;bmi .end
 	lda #$fe ; index tiles vides
 	sta $02
 	lda #$fA ; index tiles pleines
