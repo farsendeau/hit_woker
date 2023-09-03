@@ -51,12 +51,13 @@ forcedInputData .rs 1
 previousEnemyIndex .rs 1
 currentEnemyIndex .rs 1
 
-weaponSelect .rs 1
 bossCurrentStrategy .rs 1
 
 totalObjects .rs 1
 objectId .rs 1 ;(RefObjectNumber)
 
+weaponMeter .rs 6
+weaponSelect .rs 1
 meters .rs 5 ; Life
 drawMetersFlag .rs 1
 
@@ -67,7 +68,7 @@ screenMovedFlag .rs 1
 
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 var7B .rs 1
-var22 .rs 1 ; un rapport avec posobjet ?
+var22 .rs 1 ; un rapport avec pos objet ?
 
   .rsset $0100
 stack .rs 256 ; stack
@@ -564,7 +565,7 @@ SkitStage:
 	sta PPU2000value
 	sta PPUCTRL
 
-	jsr SkitText
+	;jsr SkitText
 	
 	; Turn off PPU
 	jsr DisableNMIPPU
@@ -1804,12 +1805,12 @@ DrawWeaponAndMetters:
 	; Life
 	ldy $0d ; restore spriteCounter
 	lda drawMetersFlag
-	;bmi .end
+	bmi .end
 	lda #$fe ; index tiles vides
 	sta $02
 	lda #$fA ; index tiles pleines
 	sta $03
-	lda #$01 ; sprite attr
+	lda #$00 ; sprite attr
 	sta $06
 	lda #$08 ; X coord
 	sta $04
@@ -1820,8 +1821,64 @@ DrawWeaponAndMetters:
 
 	; weapon
 	lda weaponSelect
+	jsr DrawWaepon
+	.end:
+		rts
+
+DrawWaepon:
+	; weapon icon
+	lda weaponSelect 
+	clc 	 ; tile id		
+	adc #$f6 ; emplacement du premier sprite weapon dans la bank
+	sta $09
+	lda #$08 ; X pos
+	sta $04
+	lda #$10 ; Y pos
+	sta $05
+	lda #$00
+	sta $06
+	jsr WriteSprite
+
+	; Weapon meters
+	lda #$E6
+	sta $09
+	sta $07 ; Save sprite digit 2
+	lda weaponSelect
+	beq .next
+	; digit value + digit bank emplacement (ex weapon 2 + #$e6)
+	; digit 1 value
+	lda weaponMeter
+	clc
+	adc #$E6
+	sta $09
+	; digit 2 value
+	lda weaponMeter+1
+	clc 
+	adc #$E6
+	sta $07
+	.next:
 	
+	; digit 1 tile
+	lda #$10 ; X pos
+	sta $04
+	lda #$10 ; Y pos
+	sta $05
+	lda #$00
+	sta $06
+	jsr WriteSprite
+	; digit 2 tile
+	lda $07 ; Restore sprite digit 2
+	sta $09
+	lda #$18 ; X pos
+	sta $04
+	lda #$10 ; Y pos
+	sta $05
+	lda #$00
+	sta $06
+	jsr WriteSprite
+
 	rts
+
 
 ;
 ; A = meter valeur (#$1c max)
