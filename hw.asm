@@ -36,8 +36,8 @@ ppuTransferRawSize .rs 1
 tsaPPUtransferSize  .rs 1
 lastRestartPointType .rs 1 ; 0=level beginning; #$xx (todo nombre de niveau) = point A 
 
-currentBeginScreen .rs 1 ; l'écran qui a la première bande
-currentEndScreen .rs 1 ; l'écran qui a la dernière bande
+currentBeginScreen .rs 1 ; la premier bande de l'écran (4 sprite de largeur)
+currentEndScreen .rs 1 ; la dernier bande de l'écran (4 sprite de largeur) 
 currentOrderNum .rs 1 ; l'ordre d'affichage de la room
 currentRoomPointer .rs 4
 
@@ -61,6 +61,8 @@ weaponSelect .rs 1
 meters .rs 5 ; Life
 drawMetersFlag .rs 1
 
+playerWalkTimer .rs 1
+playerStandingTimer .rs 1
 playerBlinkState .rs 1 ; Timer: 0 = no blinking, #$6f = max
 bossBlinkState .rs 1
 
@@ -69,6 +71,8 @@ screenMovedFlag .rs 1
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 var7B .rs 1
 var22 .rs 1 ; un rapport avec pos objet ?
+var9b .rs 1 ; LiftUnknown9B
+
 
   .rsset $0100
 stack .rs 256 ; stack
@@ -87,20 +91,27 @@ bGPalettes     .rs 16
 spritePalettes .rs 16
 unknownPalettes .rs 16
 
-objectSpriteNum .rs 20
-objectPosScreen .rs 20 ; aka. screen ID
-objectPosX      .rs 20
-objectPosY      .rs 20
-objectLifeMeter .rs 20
-objectFireDelay .rs 20
-objectFlags     .rs 20
+objectSpriteNum     .rs 20
+objectFlags         .rs 20
+objectActionStateCounter .rs 20 ; compter changement d'état d'une action; ObjectUnknown440
+objectCurrentScreen     .rs 20 ; Numéro de l'écran ou se trouve l'object
+objectPosX          .rs 20 ; Pos x de l'objet en px
+objectPosXfraction  .rs 20
+objectXSpeed        .rs 20
+objectXSpeedFraction .rs 20
+objectPosY          .rs 20
+objectPosYfraction  .rs 20
+objectFireDelay     .rs 20
+objectYSpeedFraction .rs 20
+objectYSpeed        .rs 20
 objectLifeCycleCounter .rs 20
-objetChangeCounter .rs 20 ; Counter avant changement de MetaSprite
+objectLifeMeter     .rs 20
+ObjectType          .rs 20 ; enemi ID
 
 
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
-  
+
 ; PPU const
 PPUCTRL   = $2000
 PPUMASK   = $2001
@@ -125,6 +136,7 @@ ROOM_SPRITE_PALETTE1 = $bca0
 ; Sprite
 SPRITE_TABLE = $0200 
 CURRENT_SPRITE_DATA = $0204 ;(200-203 sprite 0)
+PLAYER_NUMBER_STATE_MOVING = 03 ; Nombre de phase de l'action de déplacement
 
 ;-----------
   .bank 0		;00 (1/2 first bank/swappable)
@@ -369,58 +381,6 @@ textSkit13:
 
   .bank 12		;06
   .org $8000
-;
-; Pour metaSpritesActionXX
-;     00 : Frame avant changement de state (genre perso qui cligne des yeux)
-;     01-xx : une action peu avoir plusieurs metaSprite, c'est l'id du metaSprite (dataMetaSpriteXX)
-metaSpritesActionTable:
-	.dw metaSpritesActionStanding
-
-metaSpritesActionStanding:
-	.db $20, $00
-
-;
-; Pour dataSpriteXX
-;     00 : Nb sprite
-;     01 : Id offsetTable
-;     02 : tile Id
-;     03 : tile Attr 
-;     xx : boucle [01 -> 04] * 00
-; 
-dataMetaSpriteTable:
-	.dw dataMetaSpriteLanding1 
-
-dataMetaSpriteLanding1:
-	.db $09 ; 9 sprite
-	.db $00 ;offsetLanding
-	.db $41, $40
-	.db $42, $40
-	.db $50, $40 
-	.db $51, $40 
-	.db $52, $40 
-	.db $61, $40 
-	.db $62, $40 
-	.db $71, $40 
-	.db $72, $40
-
-offsetTable:
-	.dw offsetLanding
-
-;
-; Contien les offsetId de chaque sprite composant le metasprite
-;
-offsetLanding
-	.db $01, $02, $03, $04, $05, $06, $07, $08, $09
-
-offsetY:
-	.db $00, $00, $00, $08, $08, $08, $10, $10, $18, $18 
-
-offsetRightX:
-    .db $00, $08, $00, $10, $08, $00, $08, $00, $08, $00 
-	
-offsetLeftX:
-	.db $00, $08, $10, $00, $08, $10, $08, $10, $08, $10
-
 
 Reset2:
 	.wait1:       ; On attend 1 frame
@@ -660,7 +620,7 @@ StageBeginFromDeath:
 	sta scrollPosScreen
 	jsr ScrollProcess
 	pla
-	sta objectPosScreen
+	sta objectCurrentScreen
 	jsr ScrollProcess
 	; update enemi
 	pla
@@ -680,7 +640,7 @@ StageBeginFromDeath:
 	clc
 	adc currentBeginScreen
 	sta currentEndScreen
-	lda objectPosScreen
+	lda objectCurrentScreen
 	sta scrollPosScreen
 	lda #$00
 	sta scrollPosX
@@ -739,10 +699,210 @@ StageBeginFromDeath:
 	jsr NextFrame
 
 MainLoop:
+	jsr PlayerIA
+	lda playerWalkTimer
+	; todo gestion du run
+
 	jsr UpdateGraphics
 	jsr NextFrame
 
 	JMP MainLoop
+
+PlayerIA:
+	ldx #$00
+	stx objectId
+
+	; Stop le perso
+	lda objectFlags
+	and #$7f
+	sta objectFlags
+
+	and #$0f
+	beq .next
+	; todo perso est entrain de: 
+	;     quitter une echelle
+	;     lancer quelque chose en standing
+	;     se faire toucher 
+	.next:
+
+	; Entrain de monter une échelle ?
+	and #$f0
+	cmp #$20
+	beq .noClimbingLadder
+	; todo climbing
+	.noClimbingLadder:
+
+	; Deplacement
+	lda playerWalkTimer
+	beq .dontWalking
+	; todo walking
+	rts
+
+	.dontWalking:
+		lda #$00
+		sta playerWalkTimer
+		sta playerStandingTimer
+	
+	; Si gauche/droite est appuyé pendant cette frame
+	;  
+	lda joyPad ; Touche pressée
+	and #$c0
+	beq .handleSpeed ; 
+	lda joyPadOld ; Si Ancienne touche pressée
+	and #$c0      ;     On est déjà en mouvement  
+	beq .handleFacing
+	; Nouveau déplacement init de l'action
+	;   player move doucement
+	lda #$03 ; action état mouvement lent
+	sta objectSpriteNum
+	LDA #$00
+	sta objectActionStateCounter
+	sta objectFireDelay
+	
+	.handleFacing:
+		jsr SetPlayerFacing
+		ora #$80   ; Met le perso en mouvement
+		sta objectFlags
+
+	.handleSpeed:
+		jsr HandleSpeed
+
+	; Update mouvement
+	lda $01 ; tmp facing
+	and #$40 ; droite
+	beq .facingLeft
+	; facingRight
+	jsr ObjectUpdateMovementRight
+	jmp .autoCenter
+	.facingLeft:
+		jsr ObjectUpdateMovementLeft
+
+	.autoCenter:
+		; todo
+	
+	.updateActionState: ; UpdateCurrentTilseState
+	; todo
+
+	lda objectSpriteNum
+	cmp #$09 ; saut/chute
+	;beq  ; TODO jumping/falling
+	cmp #$03 ; déplacement lent
+	bne .end
+	lda objectActionStateCounter
+	cmp #$22
+	bne .end
+	; todo player doit courir
+	
+	.end:
+		rts
+
+ObjectUpdateMovementRight:
+	ldx objectId ; objet ID
+
+	; ObjectMoveToTheRight
+
+	; ObjectPosXfraction
+	clc
+	lda objectPosXfraction, x
+	adc objectXSpeedFraction, x
+	sta objectPosXfraction
+	; ObjectPosX
+	lda objectPosX, x
+	adc objectXSpeed, x ; posX + Xspeed
+	tay ; save de la nouvelle valeur objectPosX
+
+	lda objectCurrentScreen, x
+	adc #$00 ; + carry
+
+	ldx objectId
+	beq .player ; si player
+	; enemi
+	;  TODO
+	.player:
+	cmp currentEndScreen ; le player est ou par rapport au dernier écran
+	beq .beginningEndStrip ; si = ??pas bon label
+	bcs .updateStripe ; >
+	bne .setObjectPosScrenAndPosX  ; <> (donc ici <)
+
+	.beginningEndStrip:
+		cpy #$EF ; si posX est à la fin de l'écran
+		bcc .setObjectPosScrenAndPosX
+
+	.updateStripe:
+		;todo
+
+	.setObjectPosScrenAndPosX:
+		sta objectCurrentScreen ; new bande
+		sty objectPosX
+
+	; Collision background
+	ldy objectSpriteNum, x
+	cpy #$ff
+	bne .widthTablePlayer
+	; widthTableEnemy
+	;  TODO
+	.widthTablePlayer:
+		lda playerXWidthTable, y
+
+	.setPos:
+		; POS X
+		sta $02
+		clc
+		lda objectPosX
+		adc $02 ;posX + width
+		sta $04
+		; POS SCREEN
+		lda objectCurrentScreen
+		adc $00 ; posScrean + (posX + width)
+		sta $03
+		; POS Y
+		lda objectPosY, x
+		sta $05
+		; checkBackgroundcollision
+
+	rts
+
+ObjectUpdateMovementLeft:
+
+	rts
+
+HandleSpeed:
+	ldy #$00
+	lda objectSpriteNum
+	ldx #$08 ; une action à max 8 états
+
+	.loop:
+		cmp  xSpeedAndFractionStateTable, x	
+		beq .getValue
+		dex
+		bpl .loop
+		
+	.getValue:	
+		ldy xSpeedAndFractionIdTable, x
+	
+	; set de xSpeed et xSpeedFraction
+	ldx #$00
+	jsr SetXSpeedAndFraction
+	
+	lda objectFlags
+	and #$40 ; face droite 
+	sta $01 ; tmp facing
+	
+	rts
+
+SetPlayerFacing:
+	; Met player face left
+	lda objectFlags
+	and #$bf        
+	sta objectFlags       
+	; Met player face droite si "right" touche est appuyée
+	lda joyPad
+	and #$80        
+	lsr a           
+	ora objectFlags      
+	sta objectFlags
+
+ 	rts 
 
 ScrollProcess:
 	sta $05 ; current NT
@@ -1106,6 +1266,117 @@ dataTitle:
   .bank 13		;06
   .org $A000
 
+
+;
+; Permet d'obtenir l'ID du tableau XSpeedANdFraction 
+;   pour l'état de l'action en cours
+;   
+xSpeedAndFractionStateTable:
+    .byte $00,$03,$06,$0C,$0F,$12,$13,$14,$6E
+
+xSpeedAndFractionIdTable:
+    .byte $00,$01,$08,$03,$00,$09,$01,$00,$00
+
+;
+; Table de valeurs pour objectXSpeed et objectXSpeedFraction
+; MSB XSpeedFraction
+; LSB XSpeed
+; 
+xSpeedAndFraction1:
+    .byte $00,$20,$21,$80,$01,$04,$15,$51,$61,$90 
+
+playerXWidthTable
+    .byte $08, $08, $08, $08 ;00	
+
+bjectXWidthTable
+    .byte $08, $08, $08, $08 ;00
+
+
+;;;;;; DATA SPRITE ;;;;;
+;
+; Pour metaSpritesActionXX
+;     00 : Frame avant changement de state (genre perso qui cligne des yeux)
+;     01-xx : une action peu avoir plusieurs metaSprite, c'est l'id du metaSprite (dataMetaSpriteXX)
+metaSpritesActionTable:
+	.dw metaSpritesActionStanding
+	.dw metaSpritesActionFiringWithStanding
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionMovingSlowly
+
+metaSpritesActionStanding:
+	.db $20, $00
+
+metaSpritesActionFiringWithStanding:
+metaSpritesActionDISPO
+
+metaSpritesActionMovingSlowly:
+	.db $20, $03
+;
+; Pour dataSpriteXX
+;     00 : Nb sprite
+;     01 : Id offsetTable
+;     02 : tile Id
+;     03 : tile Attr 
+;     xx : boucle [01 -> 04] * 00
+; 
+dataMetaSpriteTable:
+	.dw dataMetaSpriteLanding1
+	.dw dataMetaSpriteFiringWithStanding
+	.dw dataMetaSpriteDISPO
+	.dw dataMetaSpriteMovingSlowly
+
+dataMetaSpriteLanding1:
+	.db $09 ; 9 sprite
+	.db $00 ;offsetLanding
+	.db $41, $40
+	.db $42, $40
+	.db $50, $40 
+	.db $51, $40 
+	.db $52, $40 
+	.db $61, $40 
+	.db $62, $40 
+	.db $71, $40 
+	.db $72, $40
+
+dataMetaSpriteFiringWithStanding:
+dataMetaSpriteDISPO:
+
+dataMetaSpriteMovingSlowly:
+	.db $09 ; 9 sprite
+	.db $01 ;offsetTable offsetLanding
+	.db $43, $40
+	.db $44, $40
+	.db $53, $40 
+	.db $54, $40 
+	.db $63, $40 
+	.db $64, $40 
+	.db $73, $40 
+	.db $74, $40 
+	.db $75, $40
+
+offsetTable:
+	.dw offsetLanding
+	.dw offsetMovingSlowly
+;
+; Contient les offsetId de chaque sprite composant le metasprite
+;
+offsetLanding:
+	.db $00, $01, $02, $03, $04, $05, $06, $07, $08
+offsetMovingSlowly
+	.db $09, $00, $02, $03, $0a, $05, $0b, $07, $08
+
+
+offsetRightX:
+    .db $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10
+offsetY:
+	.db $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18
+
+	
+offsetLeftX:
+	.db $08, $10, $00, $08, $10, $08, $10, $08, $10
+
+
+
 ;-----------BANK 7---------------------------------------------------------------------
  
   .bank 14		;07 (1/2 last bank/fixed)
@@ -1178,6 +1449,25 @@ BankSwitchStage:
 	
 	rts
 	
+;
+; Set ObjectXSpeedFraction et ObjectXSpeed
+; 
+; Y = id xSpeedAndFraction1
+;
+SetXSpeedAndFraction:
+	; Les data sont en bank 6 voir pour un changement de bank
+
+	lda xSpeedAndFraction1, y
+	pha 
+	and #$f0 ; MSB xSpeedFraction
+	sta objectXSpeedFraction, x
+	pla
+	and #$0f ; LSB xSpeed
+	sta objectXSpeed, x
+
+	; voir pour un retour via une bank de stage
+	rts
+
 WriteSkitText:
 	jsr BankSwitch10
 
@@ -1966,7 +2256,8 @@ DrawObject:
 	
 	; Get config en fonction du meta sprite
 	sta $0f ; Save pos Y du meta sprite
-	lda objectSpriteNum, x  ; L'id du sprite en cours 
+	lda objectSpriteNum, x  ; L'id du sprite en cours
+	; Todo si objectSpriteNum = 0xff go end
 	lda objectFireDelay, x  ; Division par 16
 	lsr a                   ; Si action en cours on l'ajoute a l'objectSpriteNum
 	lsr a                  
@@ -1977,18 +2268,18 @@ DrawObject:
 	asl a                 
 	tay                    ; Iterator pour metaSpritesActionTable
 
-	; metaSpriteConfigXX
+	; metaSpriteActionXX
 	lda metaSpritesActionTable, y
 	sta $00;
 	lda metaSpritesActionTable+1, y
 	sta $01
 
-	lda objetChangeCounter, x ; Counter qui update du metaSprite 
+	lda objectActionStateCounter, x ; Counter qui update du metaSprite 
 	lsr a                     ;  de l'action
 	lsr a
 	lsr a
 	lsr a
-	tya                     
+	tay                    
 	iny                     
 	
 	; todo gestion du boss blinkState
@@ -2005,21 +2296,21 @@ DrawObject:
 		dey
 		beq .resetObjetFireDelay
 		dec objectFireDelay, x
-		bne .updateObjetChangeCounter
+		bne .updateobjectActionStateCounter
 	.resetObjetFireDelay:
 		lda #$00
 		sta objectFireDelay, x	
-	.updateObjetChangeCounter:
-		; jsr UpdateObjetChangeCounter
+	.updateobjectActionStateCounter:
+		; jsr UpdateobjectActionStateCounter
 	.dataMetaSprite:
 		
 		; dataMetaSpriteXX
 		pla
+		asl a
 		tay
 		lda dataMetaSpriteTable, y
 		sta $00
-		iny
-		lda dataMetaSpriteTable, Y
+		lda dataMetaSpriteTable+1, y
 		sta $01
 
 		ldy #$00 ; reset y
@@ -2040,14 +2331,6 @@ DrawObject:
 		iny 
 		lda offsetTable, y
 		sta $03
-		
-		; offsetXXTable
-		;ldy #$00
-		;lda [$06], y
-		;sta $02
-		;iny
-		;lda [$06], y
-		;sta $03
 
 		; Transpose objet posX avec le scrolling
 		ldy #$02
@@ -2074,7 +2357,7 @@ DrawObject:
 
 	; loop tiles
 	; $0a = posX
-	; $of = posY
+	; $0f = posY
 	; $00, $01 = pointer tile et attr
 	; $02, $03 pointer offset X et Y
 	; y = sprite Id
@@ -2097,15 +2380,10 @@ DrawObject:
 		tay
 		clc
 		lda offsetY, y ; local posY
-		;bmi .addObjectPosY  ; si local posY est déjà dans l'écran
 		adc $0f             ; On ajoute objet posy locale Y
 		sta CURRENT_SPRITE_DATA, x ; sprite pos Y
 		bcc .setPosY           ; si dans l'écran on set Y
 		bcs .skipThisSprite ; sinon skip le sprite
-
-		;.addObjectPosY:
-			;adc $0f    ; on ajoute la objet posY à local posY
-			;bcs .setPosY  ; toujours dans l'écran ?
 
 		.skipThisSprite:	
 			lda #$f8 ; pour être sûr qu'il soit en dehors
@@ -2126,13 +2404,10 @@ DrawObject:
 			lda offsetLeftX, y ; local posX left
 		.handlePosX:
 			clc
-			;bmi .localInScreen
 			adc $0a ; Additionne localPosX + objetPosX
 			bcc .setPosX;
 			bcs .skipThisSprite
-		;.localInScreen:
-			;adc $0a ; Additionne localPosX + objetPosX
-			;bcc .skipThisSprite; Toujour dans l'écran ?
+
 		.setPosX:
 			sta CURRENT_SPRITE_DATA+3, x ; pos X
 			ldy $0d
