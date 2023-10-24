@@ -786,12 +786,27 @@ PlayerIA:
 	lda objectSpriteNum
 	cmp #$09 ; saut/chute
 	;beq  ; TODO jumping/falling
-	cmp #$03 ; déplacement lent
+	
+	
+	; Si en mouvement
+	lda joyPadOld
+	and #$c0
+	beq .makeStanding
+	lda objectSpriteNum
+	cmp #$09
 	bne .end
-	lda objectActionStateCounter
-	cmp #$22
-	bne .end
-	; todo player doit courir
+
+	.running:
+		lda objectSpriteNum
+		cmp #$06 ; running
+		bne .end
+
+		
+	.makeStanding:
+		lda #$00 ; standing
+		sta objectSpriteNum
+		sta objectActionStateCounter
+
 	
 	.end:
 		rts
@@ -1370,8 +1385,6 @@ offsetRightX:
     .db $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10
 offsetY:
 	.db $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18
-
-	
 offsetLeftX:
 	.db $08, $10, $00, $08, $10, $08, $10, $08, $10
 
