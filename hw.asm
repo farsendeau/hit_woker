@@ -750,7 +750,7 @@ PlayerIA:
 	beq .handleSpeed ; 
 	lda joyPadOld ; Si Ancienne touche pressée
 	and #$c0      ;     On est déjà en mouvement  
-	beq .handleFacing
+	bne .handleFacing
 	; Nouveau déplacement init de l'action
 	;   player move doucement
 	lda #$03 ; action état mouvement lent
@@ -788,25 +788,64 @@ PlayerIA:
 	;beq  ; TODO jumping/falling
 	
 	
-	; Si en mouvement
+	; Mouvement si A n'est pas pressé
+	lda joyPad
+	and #$01
+	bne .makeJump
+	;si player n'est pas en mouvement
+	lda objectFlags
+	and #$80
+	bne .inMove
+	; et si touche droite/gauche n'est pas pressée à la frame précédente
 	lda joyPadOld
-	and #$c0
-	beq .makeStanding
-	lda objectSpriteNum
-	cmp #$09
-	bne .end
-
+	cmp #$c0
+	bne .running ; true
+		; todo jump
+		rts ; END
 	.running:
 		lda objectSpriteNum
 		cmp #$06 ; running
-		bne .end
+		bne .makeStand
+		; on fait ralentir le player
+		lda #$0C ; slow down
+		sta objectSpriteNum
+		lda #$01
+		sta objectActionStateCounter
+		; from 95D5: was not in a jumping state
+		lda objectActionStateCounter
+		bne .end ; END
+	.inMove:
+		lda objectSpriteNum
+		cmp #$09 ; saut/chute
+		beq .makeRun ; true
+		cmp #$03 ; mouvement lent
+		bne .end ; false
+		lda objectActionStateCounter
+		cmp #$22
+		bne .end ; false
+		; Make run
+		lda #$06
+		sta objectSpriteNum
+		lda #$00
+		sta objectActionStateCounter ; première action
 
-		
-	.makeStanding:
+		rts ; fin
+	.makeRun:
+		lda #$06
+		sta objectSpriteNum
+		lda #$00
+		sta objectActionStateCounter
+	.makeStand:
 		lda #$00 ; standing
 		sta objectSpriteNum
 		sta objectActionStateCounter
-
+		rts ; END
+	.makeJump:
+		lda #$04
+		sta objectYSpeed
+		lda #$df
+		sta objectYSpeedFraction
+		rts
 	
 	.end:
 		rts
@@ -891,10 +930,16 @@ HandleSpeed:
 		beq .getValue
 		dex
 		bpl .loop
+		; si aucun sprite trouvé c'est un sprite de moving1 ou moving2
+		lda joyPad
+		and #$c0 ; touche doite/gauche
+		beq .ySetted ; no => y = 00
+		ldy #$07
+		bne .ySetted ; yes => y = 07 
 		
 	.getValue:	
 		ldy xSpeedAndFractionIdTable, x
-	
+	.ySetted:
 	; set de xSpeed et xSpeedFraction
 	ldx #$00
 	jsr SetXSpeedAndFraction
@@ -1316,16 +1361,22 @@ metaSpritesActionTable:
 	.dw metaSpritesActionStanding
 	.dw metaSpritesActionFiringWithStanding
 	.dw metaSpritesActionDISPO
-	.dw metaSpritesActionMovingSlowly
+	.dw metaSpritesActionMovingSlowing
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionMovingRun
 
 metaSpritesActionStanding:
-	.db $20, $00
+	.db $20, $00, $00
 
 metaSpritesActionFiringWithStanding:
 metaSpritesActionDISPO
 
-metaSpritesActionMovingSlowly:
-	.db $20, $03
+metaSpritesActionMovingSlowing:
+	.db $22, $01, $01, $01
+
+metaSpritesActionMovingRun:
+	.db $16, $02, $03	
 ;
 ; Pour dataSpriteXX
 ;     00 : Nb sprite
@@ -1335,12 +1386,12 @@ metaSpritesActionMovingSlowly:
 ;     xx : boucle [01 -> 04] * 00
 ; 
 dataMetaSpriteTable:
-	.dw dataMetaSpriteLanding1
-	.dw dataMetaSpriteFiringWithStanding
-	.dw dataMetaSpriteDISPO
+	.dw dataMetaSpriteLanding
 	.dw dataMetaSpriteMovingSlowly
+	.dw dataMetaSpriteMovingRun1
+	.dw dataMetaSpriteMovingRun2
 
-dataMetaSpriteLanding1:
+dataMetaSpriteLanding:
 	.db $09 ; 9 sprite
 	.db $00 ;offsetLanding
 	.db $41, $40
@@ -1353,8 +1404,6 @@ dataMetaSpriteLanding1:
 	.db $71, $40 
 	.db $72, $40
 
-dataMetaSpriteFiringWithStanding:
-dataMetaSpriteDISPO:
 
 dataMetaSpriteMovingSlowly:
 	.db $09 ; 9 sprite
@@ -1369,9 +1418,39 @@ dataMetaSpriteMovingSlowly:
 	.db $74, $40 
 	.db $75, $40
 
+dataMetaSpriteMovingRun1:
+	.db $08 ; 9 sprits
+	.db $01 ;offsetTable todo offsetMoving1
+	.db $46, $40
+	.db $47, $40
+	.db $56, $40 
+	.db $57, $40 
+	.db $66, $40 
+	.db $67, $40 
+	.db $76, $40 
+	.db $77, $40 	
+
+dataMetaSpriteMovingRun2:
+	.db $0c ; 12 sprites
+	.db $02 ;offsetTable todo offsetMoving2
+	.db $48, $40
+	.db $49, $40
+	.db $4a, $40 
+	.db $58, $40 
+	.db $59, $40 
+	.db $5a, $40 
+	.db $68, $40 
+	.db $69, $40 
+	.db $6a, $40
+	.db $78, $40
+	.db $79, $40
+	.db $7a, $40
+
 offsetTable:
 	.dw offsetLanding
-	.dw offsetMovingSlowly
+	.dw offsetMovingSlowly ; et dataMetaSpriteMovingRun1
+	.dw offsetMovingRun2
+	
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
 ;
@@ -1379,6 +1458,8 @@ offsetLanding:
 	.db $00, $01, $02, $03, $04, $05, $06, $07, $08
 offsetMovingSlowly
 	.db $09, $00, $02, $03, $0a, $05, $0b, $07, $08
+offsetMovingRun2:
+	.db $09, $00, $01, $02, $03, $04, $0a, $05, $06, $0b, $07, $08
 
 
 offsetRightX:
@@ -2314,7 +2395,7 @@ DrawObject:
 		lda #$00
 		sta objectFireDelay, x	
 	.updateobjectActionStateCounter:
-		; jsr UpdateobjectActionStateCounter
+		jsr UpdateObjectActionStateCounter
 	.dataMetaSprite:
 		
 		; dataMetaSpriteXX
@@ -2439,6 +2520,46 @@ DrawObject:
 		stx $0d ; counterSprite
 	.end:
 		rts
+
+;
+; $00
+; 
+UpdateObjectActionStateCounter:
+	ldy #$00
+	lda [$00], y ; Premier octet de metaSpritesActionXX
+
+	; les unités sont le LSB
+	pha
+	and #$0f
+	sta $05 ; save
+
+	; les dizaines sont le MSB
+	pla
+	and #$f0
+	sta $06 ; save
+
+	lda objectActionStateCounter, x
+	and #$0f
+	cmp $05
+	bcs .incDizaine 
+	; inc unité
+	inc objectActionStateCounter, x
+	bne .end
+	.incDizaine:
+		lda objectActionStateCounter, x
+		and #$f0
+		cmp $06
+		bcs .reset
+		clc
+		adc #$10
+		bne .setActionStateConter
+	.reset:
+		lda #$00
+	.setActionStateConter:
+		sta objectActionStateCounter, x
+	.end:
+		rts
+
 
 ;
 ; A = meter valeur (#$1c max)
