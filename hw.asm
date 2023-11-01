@@ -40,6 +40,7 @@ currentBeginScreen .rs 1 ; la premier bande de l'écran (4 sprite de largeur)
 currentEndScreen .rs 1 ; la dernier bande de l'écran (4 sprite de largeur) 
 currentOrderNum .rs 1 ; l'ordre d'affichage de la room
 currentRoomPointer .rs 4
+currentStripeEndType .rs 1
 
 scrollPosX      .rs 1
 scrollPosScreen .rs 1
@@ -852,9 +853,6 @@ PlayerIA:
 
 ObjectUpdateMovementRight:
 	ldx objectId ; objet ID
-
-	; ObjectMoveToTheRight
-
 	; ObjectPosXfraction
 	clc
 	lda objectPosXfraction, x
@@ -917,7 +915,68 @@ ObjectUpdateMovementRight:
 	rts
 
 ObjectUpdateMovementLeft:
+	ldx objectId ; objet ID
+	; ObjectPosXfraction
+	sec
+	lda objectPosXfraction, x
+	sbc objectXSpeedFraction, x
+	sta objectPosXfraction
+	; ObjectPosX
+	lda objectPosX, x
+	sbc objectXSpeed, x ; posX - Xspeed
+	tay ; save de la nouvelle valeur objectPosX
 
+	lda objectCurrentScreen, x
+	sbc #$00 ; - carry
+
+	ldx objectId
+	beq .player ; si player
+	; enemi
+	;  TODO
+	.player:
+	cmp currentBeginScreen ; le player est ou par rapport au premier écran
+	bmi .beforBeginScreen ; Avant le premier ecran (logiquement pas possible)
+	beq .isBeginScreen ; si =
+	bcc .beforBeginScreen
+	bne .setObjectPosScrenAndPosX  ; <> (donc ici <)
+
+	.isBeginScreen:
+		cpy #$10 ; si la posX = #$10
+		bcs .setObjectPosScrenAndPosX
+	.beforBeginScreen:
+		lda currentBeginScreen
+		ldy #$10
+		ldx #$04
+		stx currentStripeEndType 
+		ldx #$00
+	.setObjectPosScrenAndPosX:
+		sta objectCurrentScreen
+		sty objectPosX
+
+	; Collision background
+	ldy objectSpriteNum, x
+	cpy #$ff
+	bne .widthTablePlayer
+	; widthTableEnemy
+	;  TODO
+	.widthTablePlayer:
+		lda playerXWidthTable, y
+
+	.setPos:
+		; POS X
+		sta $02
+		sec
+		lda objectPosX
+		sbc $02 ;posX + width
+		sta $04
+		; POS SCREEN
+		lda objectCurrentScreen
+		sbc $00 ; posScreen - (posX - width)
+		sta $03
+		; POS Y
+		lda objectPosY, x
+		sta $05
+		; checkBackgroundcollision
 	rts
 
 HandleSpeed:
@@ -1348,7 +1407,7 @@ xSpeedAndFraction1:
 playerXWidthTable
     .byte $08, $08, $08, $08 ;00	
 
-bjectXWidthTable
+objectXWidthTable
     .byte $08, $08, $08, $08 ;00
 
 
@@ -1386,75 +1445,75 @@ metaSpritesActionMovingRun:
 ;     xx : boucle [01 -> 04] * 00
 ; 
 dataMetaSpriteTable:
-	.dw dataMetaSpriteLanding
+	.dw dataMetaSpriteStanding
 	.dw dataMetaSpriteMovingSlowly
 	.dw dataMetaSpriteMovingRun1
 	.dw dataMetaSpriteMovingRun2
 
-dataMetaSpriteLanding:
+dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
 	.db $00 ;offsetLanding
-	.db $41, $40
-	.db $42, $40
-	.db $50, $40 
-	.db $51, $40 
-	.db $52, $40 
-	.db $61, $40 
-	.db $62, $40 
-	.db $71, $40 
-	.db $72, $40
+	.db $41, $00
+	.db $42, $00
+	.db $50, $00 
+	.db $51, $00 
+	.db $52, $00 
+	.db $61, $00 
+	.db $62, $00 
+	.db $71, $00 
+	.db $72, $00
 
 
 dataMetaSpriteMovingSlowly:
 	.db $09 ; 9 sprite
 	.db $01 ;offsetTable offsetLanding
-	.db $43, $40
-	.db $44, $40
-	.db $53, $40 
-	.db $54, $40 
-	.db $63, $40 
-	.db $64, $40 
-	.db $73, $40 
-	.db $74, $40 
-	.db $75, $40
+	.db $43, $00
+	.db $44, $00
+	.db $53, $00 
+	.db $54, $00 
+	.db $63, $00 
+	.db $64, $00 
+	.db $73, $00 
+	.db $74, $00 
+	.db $75, $00
 
 dataMetaSpriteMovingRun1:
 	.db $08 ; 9 sprits
 	.db $01 ;offsetTable todo offsetMoving1
-	.db $46, $40
-	.db $47, $40
-	.db $56, $40 
-	.db $57, $40 
-	.db $66, $40 
-	.db $67, $40 
-	.db $76, $40 
-	.db $77, $40 	
+	.db $46, $00
+	.db $47, $00
+	.db $56, $00 
+	.db $57, $00 
+	.db $66, $00 
+	.db $67, $00 
+	.db $76, $00 
+	.db $77, $00 	
 
 dataMetaSpriteMovingRun2:
 	.db $0c ; 12 sprites
 	.db $02 ;offsetTable todo offsetMoving2
-	.db $48, $40
-	.db $49, $40
-	.db $4a, $40 
-	.db $58, $40 
-	.db $59, $40 
-	.db $5a, $40 
-	.db $68, $40 
-	.db $69, $40 
-	.db $6a, $40
-	.db $78, $40
-	.db $79, $40
-	.db $7a, $40
+	.db $48, $00
+	.db $49, $00
+	.db $4a, $00 
+	.db $58, $00 
+	.db $59, $00 
+	.db $5a, $00 
+	.db $68, $00 
+	.db $69, $00 
+	.db $6a, $00
+	.db $78, $00
+	.db $79, $00
+	.db $7a, $00
 
 offsetTable:
-	.dw offsetLanding
+	.dw offsetStanding
 	.dw offsetMovingSlowly ; et dataMetaSpriteMovingRun1
 	.dw offsetMovingRun2
 	
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
 ;
-offsetLanding:
+offsetStanding:
 	.db $00, $01, $02, $03, $04, $05, $06, $07, $08
 offsetMovingSlowly
 	.db $09, $00, $02, $03, $0a, $05, $0b, $07, $08
@@ -1464,10 +1523,11 @@ offsetMovingRun2:
 
 offsetRightX:
     .db $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10
+offsetLeftX:
+	.db $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00 
 offsetY:
 	.db $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18
-offsetLeftX:
-	.db $08, $10, $00, $08, $10, $08, $10, $08, $10
+
 
 
 
@@ -2463,7 +2523,7 @@ DrawObject:
 
 		; Attr
 		lda [$00], y
-		;eor $08
+		eor $08
 		sta CURRENT_SPRITE_DATA+2, x
 		iny      ; save du y
 		sty $0d
