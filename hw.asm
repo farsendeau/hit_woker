@@ -45,6 +45,10 @@ currentStripeEndType .rs 1
 scrollPosX      .rs 1
 scrollPosScreen .rs 1
 scrollPosY      .rs 1
+screenMovedFlag .rs 1
+;Bit 0: (&01) = Nouvel enemi peut être chargé (le screen a bougé)
+;Bit 6: (&40) = Mouvement 4=avant 0=arrière
+
 
 forcedInputFlag .rs 1
 forcedInputData .rs 1
@@ -67,11 +71,8 @@ playerStandingTimer .rs 1
 playerBlinkState .rs 1 ; Timer: 0 = no blinking, #$6f = max
 bossBlinkState .rs 1
 
-screenMovedFlag .rs 1
-
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 var7B .rs 1
-var22 .rs 1 ; un rapport avec pos objet ?
 var9b .rs 1 ; LiftUnknown9B
 
 
@@ -95,7 +96,8 @@ unknownPalettes .rs 16
 objectSpriteNum     .rs 20
 objectFlags         .rs 20
 objectActionStateCounter .rs 20 ; compter changement d'état d'une action; ObjectUnknown440
-objectCurrentScreen     .rs 20 ; Numéro de l'écran ou se trouve l'object
+objectPosScreen      .rs 20 ; bande dans laquelle le l'objet est
+objectCurrentScreen .rs 20 ; Numéro de l'écran ou se trouve l'object
 objectPosX          .rs 20 ; Pos x de l'objet en px
 objectPosXfraction  .rs 20
 objectXSpeed        .rs 20
@@ -163,6 +165,7 @@ PLAYER_NUMBER_STATE_MOVING = 03 ; Nombre de phase de l'action de déplacement
   ; Si change une plage d'addr (ex: size) il faut aussi change l'alias
   .org $B000
 	; ROOM_BLOCK_DATA 
+	;   Si ajout de bloc =  ajout de pal (ROOM_BLOCK_PALETTE)
 	.db $00, $00, $00, $00
 	.db $00, $00, $08, $00 
 	.db $08, $00, $00, $00
@@ -173,6 +176,11 @@ PLAYER_NUMBER_STATE_MOVING = 03 ; Nombre de phase de l'action de déplacement
 	.db $0c, $0c, $08, $00
 	.db $18, $1c, $20, $24
 	.db $0c, $0c, $00, $00
+	.db $04, $04, $0c, $0c
+	.db $04, $04, $00, $00
+	.db $00, $08, $00, $08
+	.db $00, $00, $0c, $0c
+	.db $00, $00, $08, $04
 
 roomBlockDataStage10:
 	.db $00, $00, $00, $06, $00, $00, $04, $05
@@ -194,18 +202,29 @@ roomBlockDataStage11:
 	.db $00, $00, $00, $00, $00, $04, $05, $05
 	.db $00, $00, $00, $00, $00, $00, $04, $05
 
+roomBlockDataStage12:
+	.db $00, $00, $00, $00, $00, $00, $04, $05
+	.db $00, $00, $00, $00, $00, $00, $04, $05
+	.db $00, $00, $0a, $0a, $0a, $00, $04, $05
+	.db $00, $00, $0b, $00, $0c, $00, $04, $05
+	.db $00, $00, $0e, $00, $0c, $00, $04, $05
+	.db $00, $00, $04, $00, $00, $00, $04, $05
+	.db $0a, $0d, $04, $00, $00, $05, $05, $05
+	.db $05, $05, $05, $05, $05, $05, $05, $05
+
   ; ROOM_BLOCK_PALETTE
   .org $b300
-	.db $55, $00, $00, $00, $00, $00, $50, $11, $55, $55
+	.db $55, $00, $00, $00, $00, $00, $50, $11, $55, $55, $44, $00, $00, $44, $00
 
   ; ROOM_ORDER
   .org $bc00
-	.db $00, $01
+	.db $00, $00, $01, $02
 
   ; ROOM_POINTER_TABLE
   .org $bC30
 	.dw roomBlockDataStage10
 	.dw roomBlockDataStage11
+	.dw roomBlockDataStage12
 
   ; ROOM_LAYOUT_TABLE
   .org $bc70
@@ -224,7 +243,6 @@ roomBlockDataStage11:
   .bank 5		;02
   .org $A000
 
-	
 ;-----------
 
   .bank 6		;03
@@ -636,7 +654,7 @@ StageBeginFromDeath:
 	sta currentOrderNum
 	tay
 	jsr RoomLayoutLoadRoomNum
-
+	
 	and #$1F
 	clc
 	adc currentBeginScreen
@@ -683,9 +701,9 @@ StageBeginFromDeath:
 	lda #$40 ; Face droite
 	sta objectFlags
 	; Position
-	lda #$6c ; d48
+	lda #$80 ; milieu de l'écrant "0x80 = 128d (32x8)/2"
 	sta objectPosX
-	sta var22 ; posX Current du player ?
+	;sta $22 ; posX Current du player ?
 	lda #$A0 ; d244
 	sta objectPosY
 
@@ -774,12 +792,12 @@ PlayerIA:
 	beq .facingLeft
 	; facingRight
 	jsr ObjectUpdateMovementRight
-	jmp .autoCenter
+	jmp .autoCenterScreen
 	.facingLeft:
 		jsr ObjectUpdateMovementLeft
 
-	.autoCenter:
-		; todo
+	.autoCenterScreen:
+		jsr AutoCenterScreen
 	
 	.updateActionState: ; UpdateCurrentTilseState
 	; todo
@@ -851,19 +869,157 @@ PlayerIA:
 	.end:
 		rts
 
+AutoCenterScreen:
+		sec
+		lda $05 ; tmp objectPosX
+		sbc #$80  ; centre le perso 
+		sta scrollPosX
+		lda $03 ; tmp objectPosScreen (num écran)
+		sbc #$00 ; - carry
+		cmp currentBeginScreen
+		bmi .isBeginScreen
+		bcs .isNotBeginScreen
+		.isBeginScreen:
+			lda currentBeginScreen
+			sta scrollPosScreen
+			jmp .resetSrollPosX
+		.isNotBeginScreen:
+			sta scrollPosScreen
+			cmp currentEndScreen ; c'est le dernier écran ?
+			bne .setDataPos
+		.resetSrollPosX: ; c'est le premier écran on reset scrollPosX
+			lda #$00
+			sta scrollPosX
+			beq ObjectRelocateHorizontally
+		.setDataPos:
+			sec
+			lda objectPosX
+			sbc $05; tmp objectPosX
+			sta $0c; courante bande
+			lda objectPosScreen
+			sbc $03 ; tmp objectPosScreen
+			bpl .newStrip
+			sec
+			lda #$00
+			sbc $0c
+			beq ObjectRelocateHorizontally
+			sta $0c
+			jsr ScrollingRight
+			jmp ObjectRelocateHorizontally ; rts à la fin de la fonction
+			.newStrip: 
+				lda $0c ; courante bande
+				beq ObjectRelocateHorizontally
+				jsr ScrollingLeft
+		; go direct ObjectRelocateHorizontally
+
+
+ObjectRelocateHorizontally:
+	ldx objectId
+
+	lda $03; tmp objectPosScreen
+	sta objectPosScreen, x
+
+	lda $04 ; tmp objectPosXFraction
+	sta objectPosXfraction, x
+
+	lda $05 ; tmp ObjectPosX
+	sta objectPosX, x
+
+	rts
+
+ScrollingLeft:
+	; init du mouvement gauche
+	; Un enemi peut être chargé
+	lda #$01
+	sta screenMovedFlag
+	; reset du tsaPPUTransfer
+	ldx #$00
+	stx tsaPPUtransferSize
+	stx $0d ; utilisé dans DrawBlockFromActiveLevelMap pour l'offset tsaPPuTransfer
+
+	lda $04 ; save ObjectPosXfraction
+	pha
+	lda $05 ; save  ObjectPosX
+	pha
+
+
+	ldx objectPosScreen
+	dex
+	stx $05
+
+	lda objectPosX
+	sta $04 
+
+	jsr PrepareDrawBlock
+
+	pla 
+	sta $05 ; restore ObjectPosX
+	pla
+	sta $04 ; restore ObjectPosXfraction
+
+	rts
+
+ScrollingRight:
+	; init du mouvemnet droite
+	; Un enemi peut être chargé
+	lda #$41
+	sta screenMovedFlag
+	; reset du tsaPPUTransfer
+	ldx #$00
+	stx tsaPPUtransferSize
+	stx $0d ; utilisé dans DrawBlockFromActiveLevelMap pour l'offset tsaPPuTransfer
+	
+	lda $04 ; save ObjectPosXfraction
+	pha
+	lda $05 ; save  ObjectPosX
+	pha
+
+	; posScreen +1
+	ldx objectPosScreen
+	inx
+	stx $05
+	; posX
+	lda objectPosX
+	sta $04
+
+	.loop:
+		lda $05 ; new objectPosScreen
+		cmp currentEndScreen
+		beq .process 
+		bcs .end
+		.process:
+	 	lda $04 ; objectPosX
+		and #$03
+		bne .noDraw
+		jsr DrawBlockFromActiveLevelMap
+		.noDraw:
+			inc $04 ; inc objectPosX
+			bne .nextIterateLoop
+			inc $05 ; inc objectPosScreen
+		.nextIterateLoop:
+			dec $0C
+			bne .loop
+	.end:
+		pla 
+		sta $05 ; restore ObjectPosX
+		pla
+		sta $04 ; restore ObjectPosXfraction
+		
+		rts
+
 ObjectUpdateMovementRight:
 	ldx objectId ; objet ID
 	; ObjectPosXfraction
 	clc
 	lda objectPosXfraction, x
 	adc objectXSpeedFraction, x
-	sta objectPosXfraction
+	sta $04; tmp ObjectPosXFraction 
 	; ObjectPosX
 	lda objectPosX, x
 	adc objectXSpeed, x ; posX + Xspeed
 	tay ; save de la nouvelle valeur objectPosX
 
-	lda objectCurrentScreen, x
+	lda objectPosScreen, x
 	adc #$00 ; + carry
 
 	ldx objectId
@@ -884,8 +1040,8 @@ ObjectUpdateMovementRight:
 		;todo
 
 	.setObjectPosScrenAndPosX:
-		sta objectCurrentScreen ; new bande
-		sty objectPosX
+		sta $03 ; tmp objectPosScreen
+		sty $05 ; tmp objectPosX
 
 	; Collision background
 	ldy objectSpriteNum, x
@@ -898,19 +1054,19 @@ ObjectUpdateMovementRight:
 
 	.setPos:
 		; POS X
-		sta $02
+		sta $02 ; xwidth
 		clc
-		lda objectPosX
-		adc $02 ;posX + width
-		sta $04
+		lda $05 ; tmp ObjectPosX
+		adc $02 ; posX + width
+		sta $00 ; tmp ObjectPosXfraction
 		; POS SCREEN
-		lda objectCurrentScreen
-		adc $00 ; posScrean + (posX + width)
-		sta $03
-		; POS Y
-		lda objectPosY, x
-		sta $05
+		lda $03 ; tmp ObjectPosScreen
+		adc #$00 ; posScrean + (posX + width)
+		sta $01 ; new ObjectPosScreen
+
 		; checkBackgroundcollision
+		; TODO
+
 
 	rts
 
@@ -920,13 +1076,13 @@ ObjectUpdateMovementLeft:
 	sec
 	lda objectPosXfraction, x
 	sbc objectXSpeedFraction, x
-	sta objectPosXfraction
+	sta $04; tmp ObjectPosXFraction 
 	; ObjectPosX
 	lda objectPosX, x
 	sbc objectXSpeed, x ; posX - Xspeed
 	tay ; save de la nouvelle valeur objectPosX
 
-	lda objectCurrentScreen, x
+	lda objectPosScreen, x
 	sbc #$00 ; - carry
 
 	ldx objectId
@@ -950,8 +1106,8 @@ ObjectUpdateMovementLeft:
 		stx currentStripeEndType 
 		ldx #$00
 	.setObjectPosScrenAndPosX:
-		sta objectCurrentScreen
-		sty objectPosX
+		sta $03 ; tmp objectPosScreen
+		sty $05 ; tmp objectPosX
 
 	; Collision background
 	ldy objectSpriteNum, x
@@ -964,19 +1120,24 @@ ObjectUpdateMovementLeft:
 
 	.setPos:
 		; POS X
-		sta $02
-		sec
-		lda objectPosX
-		sbc $02 ;posX + width
-		sta $04
+		;sta $02
+		;sec
+		;lda $05 ; tmp objectPosX
+		;sbc $02 ; posX + width
+		;sta $00 ; new objectPosx
+		;sta $04 ; tmp ObjectPosXfraction
 		; POS SCREEN
-		lda objectCurrentScreen
-		sbc $00 ; posScreen - (posX - width)
-		sta $03
-		; POS Y
-		lda objectPosY, x
-		sta $05
+		;lda $03; tmp ObjectPosScreen
+		;sbc $00 ; posScreen - (posX - width)
+		;sta $01 ; new objectPosScreen
+
 		; checkBackgroundcollision
+		; TODO	
+		; a supprimer 
+		;lda $00
+		;sta $05
+		;lda $01
+		;sta $03
 	rts
 
 HandleSpeed:
@@ -1560,6 +1721,7 @@ RESET:
 
 BankSwitch: ; bank # loaded in A
 	php
+	;lda saveBank
 	sta currentBank
 	lsr a
 	tax
@@ -2085,15 +2247,15 @@ DrawBlockFromActiveLevelMap:
 	lda $05 ; Courante room
 	pha
 	sta $0c
-	lda $04
+	lda $04 ; tmp objectPosX
 	and #$E0
-	sta $0d
-	lda $04
+	sta $0d 
+	lda $04 ; tmp objectPosX
 	and #$1F
 	asl a
 	asl a
 	asl a
-	sta $0e
+	sta $0e 
 	ldy #$00
 	; Todo collision 
 	jsr CheckCollisionAgainstActives
@@ -2158,10 +2320,10 @@ CalculateNametableAddress:
 
 	lda $05
 	and #$01
-	beq .truc
+	beq .next
 	ldx #$24 ; $05 = 1 ppu à 2427
 	ldy #$27
-	.truc:
+	.next:
 	stx $08
 	sty currentRoomPointer+3
 
@@ -2274,11 +2436,11 @@ Adjust32x32BlockAddress:
 RoomLayoutLoadRoomNum:
 	lda stageId
 	jsr BankSwitchStage
-	lda ROOM_LAYOUT_TABLE+1, y
-
+	lda ROOM_LAYOUT_TABLE, y
+	pha
 	lda saveBank
 	jsr BankSwitch
-
+	pla
 	rts
 
 
@@ -2471,7 +2633,7 @@ DrawObject:
 		sty $09 ; save iterator dataSprite
 
 		; Nombre de tiles dans le metaSprite
-		lda [$00], y 
+		lda [$00], y
 		sta $0e
 		
 		; Offset pour les coordonnées
@@ -2805,8 +2967,10 @@ NMI:
 	lda #$02 ; msb
 	sta OAMDMA
 	
-	; todo TSAPPUtransfer (juste quelques tuiles)
 	
+	jsr TsaPPUtransfer
+
+
 	; UpdatePalettes
 	lda paletteUpdateDelay
 	beq .paletteUpdated
@@ -2819,7 +2983,15 @@ NMI:
 	jsr PPUTransferRaw
 	.ppuTransferRawEnd:
 	
-	; todo scroll position
+	; scroll position
+	lda PPU2000value
+	and #$fc
+	sta PPU2000value
+	lda scrollPosScreen ; Change NT si besoin
+	and #$01
+	ora PPU2000value
+	sta PPU2000value
+	sta PPUCTRL
 
 	; Restore NMI
 	lda PPU2001Value
@@ -2827,8 +2999,9 @@ NMI:
 	sta PPU2001Value
 	sta PPUMASK
 	
-	lda #0
+	lda scrollPosX
 	sta PPUSCROLL
+	lda #$00
 	sta PPUSCROLL
 	
 	lda PPU2000value
