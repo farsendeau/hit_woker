@@ -14,7 +14,7 @@
 ; VARIABLE ET CONSTANTES
   .rsset $0000
 echo .rs 1
-pointer .rs 15
+pointer .rs 19
 
 PPU2000value .rs 1
 PPU2001Value .rs 1
@@ -41,6 +41,8 @@ currentEndScreen .rs 1 ; la dernier bande de l'écran (4 sprite de largeur)
 currentOrderNum .rs 1 ; l'ordre d'affichage de la room
 currentRoomPointer .rs 4
 currentStripeEndType .rs 1
+currentTileState .rs 1 ; Etat de la tuile sur laquelle est le perso
+
 
 scrollPosX      .rs 1
 scrollPosScreen .rs 1
@@ -167,20 +169,20 @@ PLAYER_NUMBER_STATE_MOVING = 03 ; Nombre de phase de l'action de déplacement
 	; ROOM_BLOCK_DATA 
 	;   Si ajout de bloc =  ajout de pal (ROOM_BLOCK_PALETTE)
 	.db $00, $00, $00, $00
-	.db $00, $00, $08, $00 
-	.db $08, $00, $00, $00
-	.db $10, $10, $14, $14
-	.db $08, $04, $08, $04
-	.db $04, $04, $04, $04 
-	.db $08, $00, $08, $00
-	.db $0c, $0c, $08, $00
-	.db $18, $1c, $20, $24
-	.db $0c, $0c, $00, $00
-	.db $04, $04, $0c, $0c
-	.db $04, $04, $00, $00
-	.db $00, $08, $00, $08
-	.db $00, $00, $0c, $0c
-	.db $00, $00, $08, $04
+	.db $00, $00, $34, $00 
+	.db $34, $00, $00, $00
+	.db $38, $38, $3c, $3c
+	.db $34, $30, $34, $30
+	.db $30, $30, $30, $30 
+	.db $34, $00, $34, $00
+	.db $20, $20, $34, $00
+	.db $04, $08, $0c, $10
+	.db $20, $20, $00, $00
+	.db $30, $30, $20, $20
+	.db $30, $30, $00, $00
+	.db $00, $34, $00, $34
+	.db $00, $00, $20, $20
+	.db $00, $00, $34, $30
 
 roomBlockDataStage10:
 	.db $00, $00, $00, $06, $00, $00, $04, $05
@@ -216,7 +218,7 @@ roomBlockDataStage12:
   .org $b300
 	.db $55, $00, $00, $00, $00, $00, $50, $11, $55, $55, $44, $00, $00, $44, $00
 
-  ; ROOM_ORDER
+  ; ROOM_ORDER (id de la Room)
   .org $bc00
 	.db $00, $00, $01, $02
 
@@ -798,10 +800,8 @@ PlayerIA:
 
 	.autoCenterScreen:
 		jsr AutoCenterScreen
+		jsr UpdateCurrentTileState
 	
-	.updateActionState: ; UpdateCurrentTilseState
-	; todo
-
 	lda objectSpriteNum
 	cmp #$09 ; saut/chute
 	;beq  ; TODO jumping/falling
@@ -2443,6 +2443,216 @@ RoomLayoutLoadRoomNum:
 	pla
 	rts
 
+UpdateCurrentTileState:
+	; Reset de la currenTileState
+	lda #$00
+	sta currentTileState
+	; POS du player
+	lda objectPosX       ; posX
+	sta $00              ; tmp objectPosX
+	lda objectPosScreen  ; Ecran actuel
+	sta $01              ; tmp objectPosScreen
+	lda objectPosY       ; posY
+	sta $03              ; temp objectPosY
+	jsr ObjectVerifyBackgroundCollision
+
+	rts
+
+ObjectVerifyBackgroundCollision:
+	lda stageId 
+	jsr BankSwitchStage
+	lda $01 ; tmp objectPosScreen
+	sta $0c ; tmp tmp objectPosScreen
+	lda $00 ; tmp objectPosX
+	sta $0d ; tmp tmp objectPosX
+	ldx objectId
+	bne .enemy
+	ldx #$02 ; id blockHeightTable
+	
+	.loop:
+		clc
+		lda $03 ; tmp objectPosY
+		adc blockHeightTable, x
+		sta $0e ; posY à check
+		jsr ReadCurrentStageMap
+		sta $0a,x ; rest currentTileStat
+		dex
+		bpl .loop
+
+	jsr AnalyzeCurrentTile
+
+	lda saveBank
+	jmp BankSwitch
+
+	rts
+
+	.enemy:
+
+	rts
+;
+; permet de checker les tuile par rapport au perso :
+;     $f4: 2 tuiles au dessus
+;     $fc: 1 tuile  au dessus
+;     $0b: 1 tuile  en dessous
+; 
+blockHeightTable:
+	.db $f4, $fc, $0b
+
+AnalyzeCurrentTile:
+	ldx #$02
+	ldy #$00
+	lda objectFlags
+	and #$df ; clear le bit de l'échelle
+	sta objectFlags
+
+	.loop:
+		lda $0a, x ; CurrentTileState[x]
+		bpl .posTiles
+		;/!\ Logiquement on passe jamais ici Todo à supprimer après test /!\
+	; tuiles dans l'interval [0x80; 0x00[
+	.posTiles:
+		cmp #$01 ; tuile = 01 (transparent)
+		beq .do1And4 
+		cmp #$04 ; tuile = 04 (transparent)
+		bne .killAble
+	.do1And4:
+		ldy #$01 ; 
+		bne .end ; inconditionel jump
+	.killAble:
+		cmp #$03 ; tuile = 03 (kill) 
+		beq .killPlayer	
+	.climbable:
+		cmp #$02 ; tuile = 02 (climbable)
+		bne .resetWalkTimer
+		lda currentTileState
+		ora CurrentTileStateTable, x
+		sta currentTileState
+		jmp .nextLoop
+	.resetWalkTimer:
+		cmp #$05
+		bne .nextLoop
+	.nextLoop: ; tuile = 0 passera directement ici elle valide aucune condition
+		dex
+		bpl .loop
+	.end:
+		tya
+		rts
+	.killPlayer:
+		jmp KillPlayer	
+	
+
+
+ReadCurrentStageMap:
+	; todo collision avec actives
+
+	; check bord de l'écran bas
+	lda $0e ; blocY  à checker
+	cmp #$f0 ; bord bas de l'écran 
+	bcc .checkTuile ;non 
+	ldy objectId
+	lda objectPosY, y
+	cmp #$f1 ; idem bord bas de l'écran
+	bcs .resetY
+	cmp #$80
+	bcs .checkTuile
+	.resetY:
+		; quand Ypos < #$80 or Ypos >= #$F1 and $0E != #$F0
+		lda $00
+		sta $0e
+	.checkTuile:
+		ldy $0c ; tmp objectPosScreen écrant actuel
+		lda ROOM_ORDER, y ; id room affichée
+		asl A
+		tay
+		lda ROOM_POINTER_TABLE, y
+		sta $04
+		lda ROOM_POINTER_TABLE+1, y
+		sta $05
+		lda $0d ; tmp objectPosX
+		lsr a
+		lsr a
+		and #$38
+		sta $07 ; currentRoomPointer+1
+		lda $0e ; tmp posY
+		rol a
+		rol a
+		rol a
+		rol a
+		and #$07
+		ora $07 ; currentRoomPointer+1
+		tay
+
+		lda [$04], y
+		ldy #$00
+		sty $09 ; currentRoomPointer
+		asl a   ; x4 sur 2 octets pour avoir ROOM_BLOCK_DATA
+		rol $09
+		asl a
+		rol $09
+		tay ; id ROOM_BLOCK_DATA
+
+		lda $0E ;  blocY à checker
+		and #$10
+		beq .checkY
+		iny
+	.checkY:
+		lda $0d ; tmp objectPosX
+		and #$10
+		beq .getTile
+		iny
+		iny
+	.getTile:
+		lda #LOW(ROOM_BLOCK_DATA)  ;ROOM_BLOCK_DATA $b000
+		sta $08
+		lda #HIGH(ROOM_BLOCK_DATA)
+		ora $09
+		sta $09
+
+		lda [$08], y ; La tuile
+		and #$30 ; on veut que les bits 4 et 5 (ici à changer si la bank grandit)
+		asl a    ; décalage vers la gauche de 2
+		asl a
+		clc
+		ldy stageId
+		sty $06
+		asl a
+		rol $06
+		asl a
+		rol $06
+		ldy $06
+		lda BlockTransparencyMap, y
+		cmp #$02
+		bne .noClimbable
+		lda objectId
+		bne .noPlayer
+		; pour le player
+		lda $0d
+		and #$f0
+		sta $0a 
+	.noPlayer:
+		lda #$02
+	.noClimbable:
+		
+	rts
+	
+;
+; bloc par lvl
+;
+BlockTransparencyMap:
+	.db $00, $01, $02, $03
+	.db $00, $01, $02, $03 ; lvl 1
+
+; CurrentTileStateBits
+CurrentTileStateTable:
+	.db $08 ; player est sur une tuile echelle
+	.db $04 ; tuile échelle au dessus (2px)
+	.db $02 ; tuile échelle au dessus (4px)
+
+
+
+KillPlayer:
+	; TODO
+	rts
 
 ;-------Graphics-----------
 UpdateGraphics:
@@ -2967,9 +3177,7 @@ NMI:
 	lda #$02 ; msb
 	sta OAMDMA
 	
-	
 	jsr TsaPPUtransfer
-
 
 	; UpdatePalettes
 	lda paletteUpdateDelay
