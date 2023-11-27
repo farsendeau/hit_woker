@@ -1614,57 +1614,57 @@ dataMetaSpriteTable:
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
 	.db $00 ;offsetLanding
-	.db $41, $00
-	.db $42, $00
-	.db $50, $00 
-	.db $51, $00 
-	.db $52, $00 
-	.db $61, $00 
-	.db $62, $00 
-	.db $71, $00 
-	.db $72, $00
+	.db $01, $00
+	.db $02, $00
+	.db $10, $00 
+	.db $11, $00 
+	.db $12, $00 
+	.db $20, $00 
+	.db $21, $00 
+	.db $30, $00 
+	.db $31, $00
 
 
 dataMetaSpriteMovingSlowly:
 	.db $09 ; 9 sprite
 	.db $01 ;offsetTable offsetLanding
-	.db $43, $00
-	.db $44, $00
-	.db $53, $00 
-	.db $54, $00 
-	.db $63, $00 
-	.db $64, $00 
-	.db $73, $00 
-	.db $74, $00 
-	.db $75, $00
+	.db $01, $00
+	.db $02, $00
+	.db $13, $00 
+	.db $12, $00 
+	.db $22, $00 
+	.db $23, $00 
+	.db $32, $00 
+	.db $33, $00 
+	.db $34, $00
 
 dataMetaSpriteMovingRun1:
 	.db $08 ; 9 sprits
 	.db $01 ;offsetTable todo offsetMoving1
-	.db $46, $00
-	.db $47, $00
-	.db $56, $00 
-	.db $57, $00 
-	.db $66, $00 
-	.db $67, $00 
-	.db $76, $00 
-	.db $77, $00 	
+	.db $03, $00
+	.db $04, $00
+	.db $15, $00 
+	.db $16, $00 
+	.db $24, $00 
+	.db $25, $00
+	.db $00, $00 
+	.db $35, $00
 
 dataMetaSpriteMovingRun2:
 	.db $0c ; 12 sprites
 	.db $02 ;offsetTable todo offsetMoving2
-	.db $48, $00
-	.db $49, $00
-	.db $4a, $00 
-	.db $58, $00 
-	.db $59, $00 
-	.db $5a, $00 
-	.db $68, $00 
-	.db $69, $00 
-	.db $6a, $00
-	.db $78, $00
-	.db $79, $00
-	.db $7a, $00
+	.db $05, $00
+	.db $06, $00
+	.db $07, $00 
+	.db $17, $00 
+	.db $18, $00 
+	.db $19, $00 
+	.db $26, $00 
+	.db $27, $00 
+	.db $28, $00
+	.db $36, $00
+	.db $37, $00
+	.db $38, $00
 
 offsetTable:
 	.dw offsetStanding
