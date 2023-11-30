@@ -41,8 +41,9 @@ currentEndScreen .rs 1 ; la dernier bande de l'écran (4 sprite de largeur)
 currentOrderNum .rs 1 ; l'ordre d'affichage de la room
 currentRoomPointer .rs 4
 currentStripeEndType .rs 1
-currentTileState .rs 1 ; Etat de la tuile sur laquelle est le perso
-
+tileLadderState .rs 1 ; state pour l'échelle  (CurrentTileState)
+currentTuilesState .rs 3 ; state des tuiles du dessus et en dessous
+ladderPosX .rs 1
 
 scrollPosX      .rs 1
 scrollPosScreen .rs 1
@@ -113,9 +114,10 @@ objectLifeCycleCounter .rs 20
 objectLifeMeter     .rs 20
 ObjectType          .rs 20 ; enemi ID
 
-
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
+
+
 
 ; PPU const
 PPUCTRL   = $2000
@@ -739,20 +741,38 @@ PlayerIA:
 	sta objectFlags
 
 	and #$0f
-	beq .next
+	beq .checkClimbing
 	; todo perso est entrain de: 
 	;     quitter une echelle
 	;     lancer quelque chose en standing
 	;     se faire toucher 
-	.next:
-
-	; Entrain de monter une échelle ?
-	and #$f0
-	cmp #$20
-	beq .noClimbingLadder
-	; todo climbing
-	.noClimbingLadder:
-
+	
+	.checkClimbing:
+		; Entrain de monter une échelle ?
+		lda objectFireDelay
+		and #$f0
+		cmp #$20
+		beq PlayerIACheckMoving
+		lda objectFlags
+		and #$10 ; début d'action
+		bne .ladderHandler
+		lda tileLadderState
+		and #$7f ; check si échelle est dans le coin
+		beq PlayerIACheckMoving
+		; si echelle on regarde le pad directionnelle
+		lda joyPad
+		and #$30 ; up/down
+		beq PlayerIACheckMoving
+		ora tileLadderState
+		cmp #$11 ; up + tuile état 1 = 0001 0001
+		beq PlayerIACheckMoving
+		cmp #$2e ; down + tuile état e = 0010 1110
+		beq PlayerIACheckMoving
+		jmp LadderInit
+	.ladderHandler:
+		jmp LadderHandler
+	
+	PlayerIACheckMoving:
 	; Deplacement
 	lda playerWalkTimer
 	beq .dontWalking
@@ -869,6 +889,91 @@ PlayerIA:
 	.end:
 		rts
 
+LadderInit:
+	; init du flag
+	lda objectFlags
+	ora #$10 ; set bit5 pour le début d'action
+	EOR #$40 ; chengmeent de direction
+	sta objectFlags
+	; init de l'action
+	lda #$00
+	sta objectActionStateCounter
+	sta objectFireDelay
+	lda ladderPosX 
+	sta $05 ; tmp objectPosXfraction
+	lda objectPosScreen
+	sta $03 ; tmp objectPosScreen
+	jsr AutoCenterScreen
+	
+; Ladder_Handler
+LadderHandler:
+	lda #$15 ; action on Ladder
+	sta objectSpriteNum
+	; presse bouton B
+	lda joyPad
+	and #$02
+	bne .presseB
+	; press up, down ou A
+	lda joyPad
+	and #$31 
+	beq .holdStill
+	and #$30       ; Si On a pressé A ? (joyPad != 0x30)
+	beq .release   ; Non
+	and #$10       ; Sinon si  pad down
+	beq .climbDown ; NON
+	; climbUp:     : Alors on monte
+		ldy #$00 ; XSpeed
+		ldx #$c0 ; XSpeedFraction (speed +0.75)
+		lda tileLadderState
+		and #$0C  ; Si échelle au dessus et player est entrain de monter
+		bne .climbUpAvailable ; oui 
+      	; non alors on ajuste la position au dessus de l'échelle
+		lda objectPosY
+		and #$f0
+		sec
+		sbc #$0c
+		sta objectPosY
+		jmp .release
+	
+	.climbUpAvailable:
+		and #$08 	; Il y'a une échelle au dessus ?
+		bne .climb  ; oui
+		lda #$17    ; Non on est entrain de quitter l'échelle   
+		sta objectSpriteNum ; Sprite de sortie de l'échelle
+		bne .climb ; inconditionnel jmp
+	.climbDown:
+
+	.climb:
+		lda objectFireDelay ; On est en train de shooter ?
+		beq .setClimbPos ; Non 
+		ldx #$00         ; Oui
+		ldy #$00         ; On stop la montée
+	.setClimbPos:
+		sty objectYSpeed            ; set de YSpeed et YSpeedFraction
+		stx objectYSpeedFraction
+		jsr UpdateCurrentTileState  ; recheck des tuiles 
+		lda tileLadderState
+		beq .release
+		; todo ObjectDoCollisionChecksAndAvoidWalls
+		jsr ObjectDoCollisionChecksAndAvoidWalls
+		; bcs
+		rts ; TODO ICI le rts retourne n'imp
+	.presseB:
+	.holdStill:
+		lda objectActionStateCounter
+		and #$f0
+		sta objectActionStateCounter
+		
+		rts
+	.release:
+		; le player lache l'échelle
+		lda #$40 
+		sta objectYSpeedFraction
+		lda #$ff
+		sta objectYSpeed
+		jmp ObjectStandStillRight
+	rts
+
 AutoCenterScreen:
 		sec
 		lda $05 ; tmp objectPosX
@@ -911,8 +1016,11 @@ AutoCenterScreen:
 				beq ObjectRelocateHorizontally
 				jsr ScrollingLeft
 		; go direct ObjectRelocateHorizontally
-
-
+		
+;
+; Doit être suivi par 
+; AutoCenterScreen
+;
 ObjectRelocateHorizontally:
 	ldx objectId
 
@@ -925,7 +1033,33 @@ ObjectRelocateHorizontally:
 	lda $05 ; tmp ObjectPosX
 	sta objectPosX, x
 
+	rts	
+
+ObjectDoCollisionChecksAndAvoidWalls:
+	ldx objectId
+	jsr ObjectCheckIfOutScreenVertically
 	rts
+
+ObjectCheckIfOutScreenVertically:
+	sec
+	lda objectPosYfraction, X
+	sbc objectYSpeedFraction, x
+	sta $00 ;tmp objectPosYfraction
+	lda objectPosY, x
+	sbc objectYSpeed, x
+	sta $01
+	; todo check 
+
+	lda $00
+	sta objectPosYfraction
+	lda $01
+	sta objectPosY
+
+	.next:
+
+
+	rts
+
 
 ScrollingLeft:
 	; init du mouvement gauche
@@ -1006,6 +1140,17 @@ ScrollingRight:
 		sta $04 ; restore ObjectPosXfraction
 		
 		rts
+
+ObjectStandStillRight:
+	lda objectFlags ; met le perso face droite
+	and #$40
+	sta objectFlags
+	lda #$00
+	sta objectSpriteNum ; sprite standing
+	sta joyPadOld ; reset de la touche pressé la frame d'avant
+
+	jmp PlayerIACheckMoving ; go PlayerIA
+
 
 ObjectUpdateMovementRight:
 	ldx objectId ; objet ID
@@ -1585,18 +1730,37 @@ metaSpritesActionTable:
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionMovingRun
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionLadder
 
 metaSpritesActionStanding:
-	.db $20, $00, $00
+	.db $00, $00
 
 metaSpritesActionFiringWithStanding:
-metaSpritesActionDISPO
+metaSpritesActionDISPO:
 
 metaSpritesActionMovingSlowing:
 	.db $22, $01, $01, $01
 
 metaSpritesActionMovingRun:
 	.db $16, $02, $03	
+
+metaSpritesActionLadder:
+	.db $00, $04
+
 ;
 ; Pour dataSpriteXX
 ;     00 : Nb sprite
@@ -1610,6 +1774,7 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteMovingSlowly
 	.dw dataMetaSpriteMovingRun1
 	.dw dataMetaSpriteMovingRun2
+	.dw dataMetaSpriteLadderGrab
 
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
@@ -1639,7 +1804,7 @@ dataMetaSpriteMovingSlowly:
 	.db $34, $00
 
 dataMetaSpriteMovingRun1:
-	.db $08 ; 9 sprits
+	.db $08 ; 8 sprits
 	.db $01 ;offsetTable todo offsetMoving1
 	.db $03, $00
 	.db $04, $00
@@ -1666,10 +1831,23 @@ dataMetaSpriteMovingRun2:
 	.db $37, $00
 	.db $38, $00
 
+dataMetaSpriteLadderGrab:
+	.db $08 ; 8 sprite
+	.db $03 ;offsetLanding
+	.db $08, $00
+	.db $09, $00
+	.db $1a, $00 
+	.db $1b, $00 
+	.db $29, $00 
+	.db $2a, $00 
+	.db $39, $00
+	.db $3a, $00
+
 offsetTable:
 	.dw offsetStanding
 	.dw offsetMovingSlowly ; et dataMetaSpriteMovingRun1
 	.dw offsetMovingRun2
+	.dw offsetLadder
 	
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
@@ -1680,14 +1858,17 @@ offsetMovingSlowly
 	.db $09, $00, $02, $03, $0a, $05, $0b, $07, $08
 offsetMovingRun2:
 	.db $09, $00, $01, $02, $03, $04, $0a, $05, $06, $0b, $07, $08
+offsetLadder:
+    .db $0c, $0d, $0e, $0f, $10, $11, $12, $13 
 
 
+	;    00   01   02   03   04   05   06   07   08   09   0a   0b  0c   0d   0e   0f   10   11   12   13
 offsetRightX:
-    .db $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10
+    .db $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10, $08, $00, $08, $00, $08, $00, $08, $00
 offsetLeftX:
-	.db $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00 
+	.db $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00, $00, $08, $00, $08, $00, $08, $00, $08
 offsetY:
-	.db $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18
+	.db $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18, $00, $00, $08, $08, $10, $10, $18, $18
 
 
 
@@ -2446,7 +2627,7 @@ RoomLayoutLoadRoomNum:
 UpdateCurrentTileState:
 	; Reset de la currenTileState
 	lda #$00
-	sta currentTileState
+	sta tileLadderState
 	; POS du player
 	lda objectPosX       ; posX
 	sta $00              ; tmp objectPosX
@@ -2475,7 +2656,7 @@ ObjectVerifyBackgroundCollision:
 		adc blockHeightTable, x
 		sta $0e ; posY à check
 		jsr ReadCurrentStageMap
-		sta $0a,x ; rest currentTileStat
+		sta currentTuilesState,x ; rest currentTileStat
 		dex
 		bpl .loop
 
@@ -2506,7 +2687,7 @@ AnalyzeCurrentTile:
 	sta objectFlags
 
 	.loop:
-		lda $0a, x ; CurrentTileState[x]
+		lda currentTuilesState, x ; 
 		bpl .posTiles
 		;/!\ Logiquement on passe jamais ici Todo à supprimer après test /!\
 	; tuiles dans l'interval [0x80; 0x00[
@@ -2524,9 +2705,9 @@ AnalyzeCurrentTile:
 	.climbable:
 		cmp #$02 ; tuile = 02 (climbable)
 		bne .resetWalkTimer
-		lda currentTileState
+		lda tileLadderState
 		ora CurrentTileStateTable, x
-		sta currentTileState
+		sta tileLadderState
 		jmp .nextLoop
 	.resetWalkTimer:
 		cmp #$05
@@ -2628,7 +2809,7 @@ ReadCurrentStageMap:
 		; pour le player
 		lda $0d
 		and #$f0
-		sta $0a 
+		sta ladderPosX 
 	.noPlayer:
 		lda #$02
 	.noClimbable:
