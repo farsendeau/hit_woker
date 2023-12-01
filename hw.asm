@@ -96,23 +96,24 @@ bGPalettes     .rs 16
 spritePalettes .rs 16
 unknownPalettes .rs 16
 
-objectSpriteNum     .rs 20
-objectFlags         .rs 20
-objectActionStateCounter .rs 20 ; compter changement d'état d'une action; ObjectUnknown440
-objectPosScreen      .rs 20 ; bande dans laquelle le l'objet est
-objectCurrentScreen .rs 20 ; Numéro de l'écran ou se trouve l'object
-objectPosX          .rs 20 ; Pos x de l'objet en px
-objectPosXfraction  .rs 20
-objectXSpeed        .rs 20
-objectXSpeedFraction .rs 20
-objectPosY          .rs 20
-objectPosYfraction  .rs 20
-objectFireDelay     .rs 20
-objectYSpeedFraction .rs 20
-objectYSpeed        .rs 20
-objectLifeCycleCounter .rs 20
-objectLifeMeter     .rs 20
-ObjectType          .rs 20 ; enemi ID
+; 0x20 = 32d
+objectSpriteNum     .rs 32
+objectFlags         .rs 32
+objectActionStateCounter .rs 32 ; compter changement d'état d'une action; ObjectUnknown440
+objectPosScreen      .rs 32 ; bande dans laquelle le l'objet est
+objectCurrentScreen .rs 32 ; Numéro de l'écran ou se trouve l'object
+objectPosX          .rs 32 ; Pos x de l'objet en px
+objectPosXfraction  .rs 32
+objectXSpeed        .rs 32
+objectXSpeedFraction .rs 32
+objectPosY          .rs 32
+objectPosYfraction  .rs 32
+objectFireDelay     .rs 32
+objectYSpeedFraction .rs 32
+objectYSpeed        .rs 32
+objectLifeCycleCounter .rs 32
+objectLifeMeter     .rs 32
+ObjectType          .rs 32 ; enemi ID
 
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
@@ -938,7 +939,7 @@ LadderHandler:
 	.climbUpAvailable:
 		and #$08 	; Il y'a une échelle au dessus ?
 		bne .climb  ; oui
-		lda #$17    ; Non on est entrain de quitter l'échelle   
+		lda #$15    ; Non on est entrain de quitter l'échelle   
 		sta objectSpriteNum ; Sprite de sortie de l'échelle
 		bne .climb ; inconditionnel jmp
 	.climbDown:
@@ -1016,7 +1017,7 @@ AutoCenterScreen:
 				beq ObjectRelocateHorizontally
 				jsr ScrollingLeft
 		; go direct ObjectRelocateHorizontally
-		
+
 ;
 ; Doit être suivi par 
 ; AutoCenterScreen
@@ -1038,11 +1039,21 @@ ObjectRelocateHorizontally:
 ObjectDoCollisionChecksAndAvoidWalls:
 	ldx objectId
 	jsr ObjectCheckIfOutScreenVertically
+	
+	ldx objectId
+	bne .enemy
+	lda objectFlags
+	and #$10  ; Si le player est sur une échelle ?
+	beq .enemy ; todo à changer
+	clc
+	rts 
+	.enemy:
+
 	rts
 
 ObjectCheckIfOutScreenVertically:
 	sec
-	lda objectPosYfraction, X
+	lda objectPosYfraction, x
 	sbc objectYSpeedFraction, x
 	sta $00 ;tmp objectPosYfraction
 	lda objectPosY, x
@@ -1759,7 +1770,7 @@ metaSpritesActionMovingRun:
 	.db $16, $02, $03	
 
 metaSpritesActionLadder:
-	.db $00, $04
+	.db $00, $04, $04
 
 ;
 ; Pour dataSpriteXX
