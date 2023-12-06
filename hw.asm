@@ -901,6 +901,7 @@ LadderInit:
 	sta objectActionStateCounter
 	sta objectFireDelay
 	lda ladderPosX 
+	adc #$08
 	sta $05 ; tmp objectPosXfraction
 	lda objectPosScreen
 	sta $03 ; tmp objectPosScreen
@@ -939,11 +940,25 @@ LadderHandler:
 	.climbUpAvailable:
 		and #$08 	; Il y'a une échelle au dessus ?
 		bne .climb  ; oui
-		lda #$15    ; Non on est entrain de quitter l'échelle   
+		lda #$17    ; Non on est entrain de quitter l'échelle   
 		sta objectSpriteNum ; Sprite de sortie de l'échelle
 		bne .climb ; inconditionnel jmp
 	.climbDown:
-
+		lda tileLadderState
+		cmp #$01
+		bne .climbDownPos
+		lda objectPosY
+		clc
+		adc #$0c
+		sta objectPosY
+	.climbDownPos:
+		ldy #$ff ; YSpeed
+		ldx #$40 ; YSPeedFraciont (-0.75)
+		lda tileLadderState
+		and #$0C
+		bne .climb 
+		lda #$17
+		sta objectSpriteNum
 	.climb:
 		lda objectFireDelay ; On est en train de shooter ?
 		beq .setClimbPos ; Non 
@@ -955,10 +970,9 @@ LadderHandler:
 		jsr UpdateCurrentTileState  ; recheck des tuiles 
 		lda tileLadderState
 		beq .release
-		; todo ObjectDoCollisionChecksAndAvoidWalls
 		jsr ObjectDoCollisionChecksAndAvoidWalls
-		; bcs
-		rts ; TODO ICI le rts retourne n'imp
+		bcs .release 
+		rts
 	.presseB:
 	.holdStill:
 		lda objectActionStateCounter
@@ -1770,7 +1784,7 @@ metaSpritesActionMovingRun:
 	.db $16, $02, $03	
 
 metaSpritesActionLadder:
-	.db $00, $04, $04
+	.db $16, $04, $05
 
 ;
 ; Pour dataSpriteXX
@@ -1785,7 +1799,8 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteMovingSlowly
 	.dw dataMetaSpriteMovingRun1
 	.dw dataMetaSpriteMovingRun2
-	.dw dataMetaSpriteLadderGrab
+	.dw dataMetaSpriteLadderClimb1
+	.dw dataMetaSpriteLadderClimb2
 
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
@@ -1842,23 +1857,34 @@ dataMetaSpriteMovingRun2:
 	.db $37, $00
 	.db $38, $00
 
-dataMetaSpriteLadderGrab:
-	.db $08 ; 8 sprite
-	.db $03 ;offsetLanding
+dataMetaSpriteLadderClimb1:
+	.db $07 ; 8 sprite
+	.db $03 ;offsetLadder
 	.db $08, $00
 	.db $09, $00
 	.db $1a, $00 
 	.db $1b, $00 
 	.db $29, $00 
 	.db $2a, $00 
-	.db $39, $00
 	.db $3a, $00
+
+dataMetaSpriteLadderClimb2:
+	.db $07 ; 8 sprite
+	.db $04 ;offsetLadder2
+	.db $08, $40
+	.db $09, $40
+	.db $1a, $40 
+	.db $1b, $40 
+	.db $29, $40 
+	.db $2a, $40 
+	.db $3a, $40
 
 offsetTable:
 	.dw offsetStanding
 	.dw offsetMovingSlowly ; et dataMetaSpriteMovingRun1
 	.dw offsetMovingRun2
 	.dw offsetLadder
+	.dw offsetLadder2
 	
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
@@ -1870,21 +1896,22 @@ offsetMovingSlowly
 offsetMovingRun2:
 	.db $09, $00, $01, $02, $03, $04, $0a, $05, $06, $0b, $07, $08
 offsetLadder:
-    .db $0c, $0d, $0e, $0f, $10, $11, $12, $13 
-
+    .db $0c, $0d, $0e, $0f, $10, $11, $13 
+offsetLadder2:
+    .db $0d, $0c, $0f, $0e, $11, $10, $12 
 
 	;    00   01   02   03   04   05   06   07   08   09   0a   0b  0c   0d   0e   0f   10   11   12   13
 offsetRightX:
-    .db $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10, $08, $00, $08, $00, $08, $00, $08, $00
+   ;.db $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10, $08, $00, $08, $00, $08, $00, $08, $00
+	.db $fc, $f4, $04, $fc, $f4, $fc, $f4, $fc, $f4, $04, $04, $04, $00, $f8, $00, $f8, $00, $f8, $00, $f8
 offsetLeftX:
-	.db $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00, $00, $08, $00, $08, $00, $08, $00, $08
+	;.db $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00, $00, $08, $00, $08, $00, $08, $00, $08
+	.db $fc, $04, $f4, $fc, $04, $fc, $04, $fc, $04, $f4, $f4, $f4, $f8, $00, $f8, $00, $f8, $00, $f8, $00
 offsetY:
 	.db $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18, $00, $00, $08, $08, $10, $10, $18, $18
 
 
-
-
-;-----------BANK 7---------------------------------------------------------------------
+;--------------------BANK 7---------------------------------------------------------------------
  
   .bank 14		;07 (1/2 last bank/fixed)
   .org $C000
@@ -2647,8 +2674,39 @@ UpdateCurrentTileState:
 	lda objectPosY       ; posY
 	sta $03              ; temp objectPosY
 	jsr ObjectVerifyBackgroundCollision
-
-	rts
+	
+	sec
+	lda objectPosYfraction
+	sbc objectYSpeedFraction
+	lda objectPosY
+	sbc objectYSpeed
+	ldx objectYSpeed
+	bmi .movingUp
+	; movingDoww:
+		sec
+		sbc #$0c ; tuile du dessus
+		jmp .readTile
+	.movingUp:
+		clc
+		adc #$0c ; tuile du dessous
+	.readTile:
+		sta $0e ; Y de la tuile à tester 
+		lda stageId 
+		jsr ReadCurrentStageMap
+		cmp #$02
+		bne .end
+		lda tileLadderState
+		ldx objectYSpeed
+		bmi .enableClimbDown
+		; enableClimUp:
+			ora #$10 ; force climbing up
+			bne .setTileLadderState
+		.enableClimbDown:
+			ora #$01; force climbing down	
+		.setTileLadderState:
+			sta tileLadderState
+	.end:
+		rts
 
 ObjectVerifyBackgroundCollision:
 	lda stageId 
@@ -2820,7 +2878,7 @@ ReadCurrentStageMap:
 		; pour le player
 		lda $0d
 		and #$f0
-		sta ladderPosX 
+		sta ladderPosX ; $2E
 	.noPlayer:
 		lda #$02
 	.noClimbable:
@@ -2829,6 +2887,9 @@ ReadCurrentStageMap:
 	
 ;
 ; bloc par lvl
+;
+; $02 block climable up
+; $03 block killable
 ;
 BlockTransparencyMap:
 	.db $00, $01, $02, $03
@@ -2839,7 +2900,6 @@ CurrentTileStateTable:
 	.db $08 ; player est sur une tuile echelle
 	.db $04 ; tuile échelle au dessus (2px)
 	.db $02 ; tuile échelle au dessus (4px)
-
 
 
 KillPlayer:
@@ -3123,8 +3183,8 @@ DrawObject:
 		.handlePosX:
 			clc
 			adc $0a ; Additionne localPosX + objetPosX
-			bcc .setPosX;
-			bcs .skipThisSprite
+			;bcc .setPosX;
+			;bcs .skipThisSprite
 
 		.setPosX:
 			sta CURRENT_SPRITE_DATA+3, x ; pos X
