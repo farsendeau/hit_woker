@@ -25,6 +25,8 @@ metaSpritesActionTable:
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionLadder
+	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionLadderTop
 
 metaSpritesActionStanding:
 	.db $00, $00
@@ -41,6 +43,9 @@ metaSpritesActionMovingRun:
 metaSpritesActionLadder:
 	.db $16, $04, $05
 
+metaSpritesActionLadderTop:
+	.db $00, $06
+
 ;
 ; Pour dataSpriteXX
 ;     00 : Nb sprite
@@ -56,7 +61,9 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteMovingRun2
 	.dw dataMetaSpriteLadderClimb1
 	.dw dataMetaSpriteLadderClimb2
+	.dw dataMetaSpriteLadderTop
 
+	
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
 	.db $00 ;offsetLanding
@@ -133,6 +140,15 @@ dataMetaSpriteLadderClimb2:
 	.db $29, $40 
 	.db $2a, $40 
 	.db $3a, $40
+
+dataMetaSpriteLadderTop:
+	.db $05
+	.db $03 ; Même que offsetLadder
+	.db $0a, $00
+	.db $0b, $00
+	.db $2b, $00
+	.db $2c, $00
+	.db $3a, $00
 
 offsetTable:
 	.dw offsetStanding

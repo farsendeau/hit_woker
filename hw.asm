@@ -848,7 +848,7 @@ LadderHandler:
 	.climbUpAvailable:
 		and #$08 	; Il y'a une échelle au dessus ?
 		bne .climb  ; oui
-		lda #$17    ; Non on est entrain de quitter l'échelle   
+		lda #$17    ; Non on est entrain de quitter l'échelle
 		sta objectSpriteNum ; Sprite de sortie de l'échelle
 		bne .climb ; inconditionnel jmp
 	.climbDown:
@@ -865,7 +865,7 @@ LadderHandler:
 		lda tileLadderState
 		and #$0C
 		bne .climb 
-		lda #$17
+		lda #$17 ; On quitte l'échelle
 		sta objectSpriteNum
 	.climb:
 		lda objectFireDelay ; On est en train de shooter ?
@@ -961,7 +961,9 @@ ObjectRelocateHorizontally:
 ObjectDoCollisionChecksAndAvoidWalls:
 	ldx objectId
 	jsr ObjectCheckIfOutScreenVertically
-	
+	bcc .next
+	; todo player tombe en dehors de l'écran
+	.next:
 	ldx objectId
 	bne .enemy
 	lda objectFlags
@@ -988,6 +990,7 @@ ObjectCheckIfOutScreenVertically:
 	lda $01
 	sta objectPosY
 
+	clc
 	.next:
 
 
@@ -2435,6 +2438,7 @@ UpdateCurrentTileState:
 	.readTile:
 		sta $0e ; Y de la tuile à tester 
 		lda stageId 
+		jsr BankSwitchStage
 		jsr ReadCurrentStageMap
 		cmp #$02
 		bne .end
@@ -2449,6 +2453,8 @@ UpdateCurrentTileState:
 		.setTileLadderState:
 			sta tileLadderState
 	.end:
+		lda saveBank
+		jmp BankSwitch
 		rts
 
 ObjectVerifyBackgroundCollision:
