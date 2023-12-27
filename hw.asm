@@ -77,6 +77,7 @@ bossBlinkState .rs 1
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 var7B .rs 1
 var9b .rs 1 ; LiftUnknown9B
+var96 .rs 1
 
 
   .rsset $0100
@@ -617,7 +618,7 @@ StageBeginFromDeath:
 	lda #$80 ; milieu de l'écrant "0x80 = 128d (32x8)/2"
 	sta objectPosX
 	;sta $22 ; posX Current du player ?
-	lda #$A0 ; d244
+	lda #$AC ; d244
 	sta objectPosY
 
 	jsr UpdateGraphics
@@ -814,6 +815,7 @@ LadderInit:
 	lda objectPosScreen
 	sta $03 ; tmp objectPosScreen
 	jsr AutoCenterScreen
+
 	
 ; Ladder_Handler
 LadderHandler:
@@ -833,15 +835,15 @@ LadderHandler:
 	beq .climbDown ; NON
 	; climbUp:     : Alors on monte
 		ldy #$00 ; XSpeed
-		ldx #$c0 ; XSpeedFraction (speed +0.75)
+		ldx #$c0 ; XSpeedFraction (speed +0.75)s
 		lda tileLadderState
 		and #$0C  ; Si échelle au dessus et player est entrain de monter
 		bne .climbUpAvailable ; oui 
       	; non alors on ajuste la position au dessus de l'échelle
 		lda objectPosY
-		and #$f0
+		
 		sec
-		sbc #$0c
+		sbc #$0b ; replace le perso en haut de l'échelle
 		sta objectPosY
 		jmp .release
 	
@@ -857,7 +859,7 @@ LadderHandler:
 		bne .climbDownPos
 		lda objectPosY
 		clc
-		adc #$0c
+		adc $0c
 		sta objectPosY
 	.climbDownPos:
 		ldy #$ff ; YSpeed
@@ -877,7 +879,15 @@ LadderHandler:
 		stx objectYSpeedFraction
 		jsr UpdateCurrentTileState  ; recheck des tuiles 
 		lda tileLadderState
-		beq .release
+		bne .nextClimb
+		lda objectYSpeed
+		bpl .release
+		sec
+		lda objectPosY
+		sbc #$07
+		sta objectPosY
+		bne .release
+	.nextClimb:	
 		jsr ObjectDoCollisionChecksAndAvoidWalls
 		bcs .release 
 		rts
@@ -960,22 +970,88 @@ ObjectRelocateHorizontally:
 
 ObjectDoCollisionChecksAndAvoidWalls:
 	ldx objectId
-	jsr ObjectCheckIfOutScreenVertically
-	bcc .next
+	;jsr ObjectCheckIfOutScreenVertically
+	bcc .isPlayer
 	; todo player tombe en dehors de l'écran
-	.next:
-	ldx objectId
-	bne .enemy
-	lda objectFlags
-	and #$10  ; Si le player est sur une échelle ?
-	beq .enemy ; todo à changer
-	clc
-	rts 
-	.enemy:
+	.isPlayer:
+		cpx #$00 ; Si c'est player
+		beq .checkPlayerEnemyHeight 
+	
+	.checkPlayerEnemyHeight:
+		ldy objectSpriteNum, x
+		cpy #$ff
+		bne .playerHeight
+	;.enenmyHeight:
+		; TODO
+	.playerHeight:
+		lda #01
+	.handleHeight:
+		;sta $10 ; tmp Y valeur à ajouter
+		lda objectYSpeed, x
+		bmi .speedMI
+	; .checkCollision:
+		;lda $10  ; tmp Y valeur à ajouter
+		;EOR #$ff ; Si A = 0x0c alors EOR = F3
+		sec
+		lda objectPosY, x 
+		sbc #$01
+		sta objectPosY, x
 
+		;jsr ObjectCollisionCheckHelper
+		lda #00
+		beq .speedPlus
+		; todo collision
+	.speedMI:
+		; todo collision
+		clc
+		lda objectPosY, x
+		adc #$01
+		sta objectPosY, x
+		lda #$00
+		sta objectPosYfraction, x
+		;jsr ObjectCollisionCheckHelper
+		lda #00
+		
+		;lda #$ff
+		;sta objectYSpeed, x
+		;lda #$40
+		;sta objectYSpeedFraction, x
+		;sec
+		;rts
+	.speedPlus:
+		sec
+		ldx objectId
+		beq .playerYSpeed
+	.playerYSpeed:
+		lda objectYSpeedFraction, x
+		sbc #$40
+		sta objectYSpeedFraction, x
+		lda objectYSpeed, x
+		sbc #$00
+		bpl .setObjectYSpeed
+	.setObjectYSpeed:
+		sta objectYSpeed, x	
+	.setObjectPosY:	
+		;lda $01	; tmp objectPosY
+		;sta objectPosY, x
+		lda $00 ; tmp objectPosYFraction
+		sta objectPosYfraction, x
+		clc
+	rts
+
+ObjectCollisionCheckHelper:
+	clc
+	adc $01 ;  tmp objectPosY
+	sta $03
+	lda objectPosScreen, x
+	sta $05 ; tmp objectPosScreen
+	lda objectPosX, X
+	sta $04 ; tmp objectPosx
+	jsr DoCollisionCheckFor
 	rts
 
 ObjectCheckIfOutScreenVertically:
+	; jamais call
 	sec
 	lda objectPosYfraction, x
 	sbc objectYSpeedFraction, x
@@ -983,19 +1059,19 @@ ObjectCheckIfOutScreenVertically:
 	lda objectPosY, x
 	sbc objectYSpeed, x
 	sta $01
-	; todo check 
-
-	lda $00
-	sta objectPosYfraction
-	lda $01
-	sta objectPosY
-
-	clc
-	.next:
-
-
-	rts
-
+	cmp #$E8        ; Bas de l'écran ?
+	bcc .checkScreenTop   ; no
+	;.screenBottom: ;oui
+		; Todo
+	.checkScreenTop:
+		cmp	#$04       ; Haut de l'écran ?q
+		bcc .screenTop ; oui
+		bcs .end       ; non
+	.screenTop:
+		; todo
+	.end:
+		clc
+		rts
 
 ScrollingLeft:
 	; init du mouvement gauche
@@ -1644,15 +1720,23 @@ xSpeedAndFractionIdTable:
 ; LSB XSpeed
 ; 
 xSpeedAndFraction1:
-    .byte $00,$20,$21,$80,$01,$04,$15,$51,$61,$90 
+    .db $00,$20,$21,$80,$01,$04,$15,$51,$61,$90 
 
 playerXWidthTable
-    .byte $08, $08, $08, $08 ;00	
+    .db $08, $08, $08, $08 ;00	
 
 objectXWidthTable
-    .byte $08, $08, $08, $08 ;00
+    .db $08, $08, $08, $08 ;00
 
-
+;TableObjectYHeightTable2
+playerYHeightTable:
+    .db $0C, $0C, $0C, $0C ;00
+    .db $0C, $0C, $0C, $0C ;
+    .db $0C, $0C, $0C, $0C ;08
+    .db $0C, $0C, $0C, $0C ;
+    .db $0C, $0C, $0C, $0C ;10
+    .db $0C, $0C, $0C, $0C
+	.db $0C, $0C, $0C, $0C
 ;;;;;; Player DATA SPRITE ;;;;;
   .include "data/player.asm"
 
@@ -2427,14 +2511,14 @@ UpdateCurrentTileState:
 	lda objectPosY
 	sbc objectYSpeed
 	ldx objectYSpeed
-	bmi .movingUp
-	; movingDoww:
+	bmi .movingDown ; si objectYSpeed = 0xff
+	; movingUp:
 		sec
-		sbc #$0c ; tuile du dessus
+		sbc #$0c ; 1.5 tuile du dessus
 		jmp .readTile
-	.movingUp:
+	.movingDown:
 		clc
-		adc #$0c ; tuile du dessous
+		adc #$14 ; 1.5 tuile du dessous
 	.readTile:
 		sta $0e ; Y de la tuile à tester 
 		lda stageId 
@@ -2454,7 +2538,7 @@ UpdateCurrentTileState:
 			sta tileLadderState
 	.end:
 		lda saveBank
-		jmp BankSwitch
+		jsr BankSwitch
 		rts
 
 ObjectVerifyBackgroundCollision:
@@ -2481,21 +2565,65 @@ ObjectVerifyBackgroundCollision:
 	jsr AnalyzeCurrentTile
 
 	lda saveBank
-	jmp BankSwitch
+	jsr BankSwitch
 
 	rts
 
 	.enemy:
 
 	rts
+
 ;
-; permet de checker les tuile par rapport au perso :
-;     $f4: 2 tuiles au dessus
-;     $fc: 1 tuile  au dessus
-;     $0b: 1 tuile  en dessous
+; $0E posY checker
+; $0C tmp ObjectPosScreen
+; $0d  tmp objectPosX
+;
+DoCollisionCheckFor:
+	lda stageId
+	jsr BankSwitchStage
+
+	lda $03 ; tmp objectPosY
+	sta $0e ; tmp tmp objectPosY
+	
+	ldx objectId
+	bne .noPlayer
+	; player:
+		lda #$00
+		sta $07
+		ldx #$03
+	
+	.loop:
+		clc
+		lda $04 ; tmp objectPosX
+		adc XWidthTable, x
+		sta $0D ; tmp objectPosX
+		lda $05 ; tmp objectPosScreen
+		adc XWidthTable-1, x
+		sta $0c
+		jsr ReadCurrentStageMap
+		sta currentTuilesState,x
+		dex 
+		bpl .loop
+
+	.noPlayer:
+	jsr PreKill
+	lda saveBank
+	jsr BankSwitch
+	rts
+
+XWidthTable:
+    .db $00,$07 ;+7
+    .db $FF,$F9 ;-7
+
+;
+; permet de checker les 3 tuiles sur lesquelles est le perso:
+;     $f4: 3 tuiles par rapport au haut du perso 
+;     $fc: 2 tuiles ...
+;     $0b: 1 tuile  ...
 ; 
 blockHeightTable:
-	.db $f4, $fc, $0b
+	.db $f4, $fc, $0d
+
 
 AnalyzeCurrentTile:
 	ldx #$02
@@ -2539,8 +2667,6 @@ AnalyzeCurrentTile:
 	.killPlayer:
 		jmp KillPlayer	
 	
-
-
 ReadCurrentStageMap:
 	; todo collision avec actives
 
@@ -2556,7 +2682,7 @@ ReadCurrentStageMap:
 	bcs .checkTuile
 	.resetY:
 		; quand Ypos < #$80 or Ypos >= #$F1 and $0E != #$F0
-		lda $00
+		lda #$00
 		sta $0e
 	.checkTuile:
 		ldy $0c ; tmp objectPosScreen écrant actuel
@@ -2608,9 +2734,9 @@ ReadCurrentStageMap:
 		sta $09
 
 		lda [$08], y ; La tuile
-		and #$30 ; on veut que les bits 4 et 5 (ici à changer si la bank grandit)
-		asl a    ; décalage vers la gauche de 2
-		asl a
+		and #$c0 ; on veut que les bits 6 et 7
+		;asl a    ; décalage vers la gauche de 2
+		;asl a
 		clc
 		ldy stageId
 		sty $06
@@ -2638,7 +2764,7 @@ ReadCurrentStageMap:
 ; bloc par lvl
 ;
 ; $02 block climable up
-; $03 block killable
+; $03 block killable (pique)
 ;
 BlockTransparencyMap:
 	.db $00, $01, $02, $03
@@ -2650,6 +2776,46 @@ CurrentTileStateTable:
 	.db $04 ; tuile échelle au dessus (2px)
 	.db $02 ; tuile échelle au dessus (4px)
 
+
+SpikeKill1:
+	jmp KillPlayer
+PreKill:
+	ldx #$02
+	lda #$00
+	sta var96 ; voi si bessoin de var ou non 
+	.loop:
+		lda currentTuilesState, x
+		bpl .dontTransparent
+	; transparent:
+	.dontTransparent:
+		cpy #$03
+		beq SpikeKill2
+		cpy #$01
+		beq .todoBLock1
+		cpy #$04
+		bne .next
+	.todoBLock1:
+		ora #$01
+	.next:
+		dex
+		bpl .loop
+		tay
+		ldx objectId
+		bne .end
+		tya
+		bne .end
+		lda objectYSpeed
+		bpl .end
+		lda tileLadderState
+		cmp #$01
+		bne .end
+		ldy #$01	
+	.end:
+		tya
+		rts
+
+SpikeKill2:
+	jmp KillPlayer		
 
 KillPlayer:
 	; TODO
@@ -2909,16 +3075,16 @@ DrawObject:
 		lda offsetY, y ; local posY
 		adc $0f             ; On ajoute objet posy locale Y
 		sta CURRENT_SPRITE_DATA, x ; sprite pos Y
-		bcc .setPosY           ; si dans l'écran on set Y
-		bcs .skipThisSprite ; sinon skip le sprite
+		;bcc .setPosY           ; si dans l'écran on set Y
+		;bcs .skipThisSprite ; sinon skip le sprite
 
-		.skipThisSprite:	
-			lda #$f8 ; pour être sûr qu'il soit en dehors
-			sta CURRENT_SPRITE_DATA, x ; sprite pos Y
+		;.skipThisSprite:	
+			;lda #$f8 ; pour être sûr qu'il soit en dehors
+			;sta CURRENT_SPRITE_DATA, x ; sprite pos Y
 			;ldy $0d ; get spriteCounter
-			jmp .nextSprite
-		.setPosY:
-			sta CURRENT_SPRITE_DATA, x 
+			;jmp .nextSprite
+		;.setPosY:
+			;sta CURRENT_SPRITE_DATA, x 
 			
 		; Pos X
 		lda $08 ; get flip
