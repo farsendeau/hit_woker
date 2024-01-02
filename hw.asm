@@ -108,7 +108,7 @@ objectPosXfraction  .rs 32
 objectXSpeed        .rs 32
 objectXSpeedFraction .rs 32
 objectPosY          .rs 32
-objectPosYfraction  .rs 32
+objectPosYFraction  .rs 32
 objectFireDelay     .rs 32
 objectYSpeedFraction .rs 32
 objectYSpeed        .rs 32
@@ -620,6 +620,8 @@ StageBeginFromDeath:
 	;sta $22 ; posX Current du player ?
 	lda #$AC ; d244
 	sta objectPosY
+	lda #$ff
+	sta objectXSpeed
 
 	jsr UpdateGraphics
 
@@ -732,9 +734,33 @@ PlayerIA:
 		jsr AutoCenterScreen
 		jsr UpdateCurrentTileState
 	
-	lda objectSpriteNum
-	cmp #$09 ; saut/chute
-	;beq  ; TODO jumping/falling
+	.pressB:
+		lda joyPad
+		and #$02
+		beq .checkSpeed
+		; jsr PlayerWeaponFire
+	.checkSpeed:
+		lda objectYSpeed
+		bmi .speedMi     ; si FF
+	.speedPlus:	
+		jsr ObjectDoCollisionChecksAndAvoidWalls
+		bcs .goEnd
+		lda joyPad
+		and #$01   ; si press A
+		; beq todo $9551
+		jmp .jumpInit
+	.goEnd:
+		jmp .end
+
+	.speedMi:
+		lda #$00 ; todo testIsRiding
+		JSR ObjectDoCollisionChecksAndAvoidWalls
+		
+
+	.jumpInit:
+		lda objectSpriteNum
+		cmp #$09 ; saut/chute
+		;beq  ; TODO jumping/falling
 	
 	
 	; Mouvement si A n'est pas pressé
@@ -841,9 +867,8 @@ LadderHandler:
 		bne .climbUpAvailable ; oui 
       	; non alors on ajuste la position au dessus de l'échelle
 		lda objectPosY
-		
 		sec
-		sbc #$0b ; replace le perso en haut de l'échelle
+		sbc #$14 ; replace le perso en haut de l'échelle
 		sta objectPosY
 		jmp .release
 	
@@ -859,7 +884,7 @@ LadderHandler:
 		bne .climbDownPos
 		lda objectPosY
 		clc
-		adc $0c
+		adc #$14
 		sta objectPosY
 	.climbDownPos:
 		ldy #$ff ; YSpeed
@@ -879,15 +904,16 @@ LadderHandler:
 		stx objectYSpeedFraction
 		jsr UpdateCurrentTileState  ; recheck des tuiles 
 		lda tileLadderState
-		bne .nextClimb
-		lda objectYSpeed
-		bpl .release
-		sec
-		lda objectPosY
-		sbc #$07
-		sta objectPosY
-		bne .release
-	.nextClimb:	
+		;bne .nextClimb
+		;lda objectYSpeed
+		;bpl .release
+		;sec
+		;lda objectPosY
+		;sbc #$07
+		;sta objectPosY
+		;bne .release
+	;.nextClimb:
+		beq .release	
 		jsr ObjectDoCollisionChecksAndAvoidWalls
 		bcs .release 
 		rts
@@ -970,7 +996,7 @@ ObjectRelocateHorizontally:
 
 ObjectDoCollisionChecksAndAvoidWalls:
 	ldx objectId
-	;jsr ObjectCheckIfOutScreenVertically
+	jsr ObjectCheckIfOutScreenVertically
 	bcc .isPlayer
 	; todo player tombe en dehors de l'écran
 	.isPlayer:
@@ -981,44 +1007,44 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		ldy objectSpriteNum, x
 		cpy #$ff
 		bne .playerHeight
-	;.enenmyHeight:
+	.enenmyHeight:
 		; TODO
 	.playerHeight:
-		lda #01
+		lda playerYHeightTable, y
 	.handleHeight:
-		;sta $10 ; tmp Y valeur à ajouter
+		sta $10 ; tmp Y valeur à ajouter
 		lda objectYSpeed, x
 		bmi .speedMI
-	; .checkCollision:
-		;lda $10  ; tmp Y valeur à ajouter
-		;EOR #$ff ; Si A = 0x0c alors EOR = F3
-		sec
-		lda objectPosY, x 
-		sbc #$01
-		sta objectPosY, x
-
-		;jsr ObjectCollisionCheckHelper
-		lda #00
-		beq .speedPlus
-		; todo collision
-	.speedMI:
-		; todo collision
+	.checkCollision:
+		lda $10  ; tmp Y valeur à ajouter
+		EOR #$ff ; Si A = 0x0c alors EOR = F3
 		clc
-		lda objectPosY, x
-		adc #$01
-		sta objectPosY, x
+		adc #$01 ; add 1 px pour le check
+		jsr ObjectCollisionCheckHelper
 		lda #$00
-		sta objectPosYfraction, x
-		;jsr ObjectCollisionCheckHelper
-		lda #00
+		beq .setterPos
+		;collision
 		
-		;lda #$ff
-		;sta objectYSpeed, x
-		;lda #$40
-		;sta objectYSpeedFraction, x
-		;sec
-		;rts
-	.speedPlus:
+	.speedMI:
+		lda $10
+		jsr ObjectCollisionCheckHelper
+		beq .setterPos
+		; todo si collision A voir parce que pas collision
+		ldx objectId
+		lda $03 ; tmp tmp objectPosY
+		and #$f0 ; On garde le MSB
+		sbc $10  ; tmp Y valeur
+		sta objectPosY, x 
+		lda #$00
+		sta objectPosYFraction, x
+	.setYSpeedMi:
+		lda #$ff
+		sta objectYSpeed, x
+		lda #$40
+		sta objectYSpeedFraction, x
+		sec
+		rts
+	.setterPos:
 		sec
 		ldx objectId
 		beq .playerYSpeed
@@ -1029,46 +1055,47 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		lda objectYSpeed, x
 		sbc #$00
 		bpl .setObjectYSpeed
+		cmp #$f4
+		bcs .setObjectYSpeed
 	.setObjectYSpeed:
 		sta objectYSpeed, x	
 	.setObjectPosY:	
-		;lda $01	; tmp objectPosY
-		;sta objectPosY, x
+		lda $01	; tmp objectPosY
+		sta objectPosY, x
 		lda $00 ; tmp objectPosYFraction
-		sta objectPosYfraction, x
+		sta objectPosYFraction, x
 		clc
 	rts
 
+
+; A = tmp Y valeur à ajouter
 ObjectCollisionCheckHelper:
 	clc
-	adc $01 ;  tmp objectPosY
-	sta $03
+	adc $01 ; tmp objectPosY
+	sta $03 ; tmp tmp objectPosY (tmp object Y + A) 
 	lda objectPosScreen, x
-	sta $05 ; tmp objectPosScreen
+	sta $02 ; tmp objectPosScreen
 	lda objectPosX, X
-	sta $04 ; tmp objectPosx
+	sta $0a ; tmp objectPosx
 	jsr DoCollisionCheckFor
 	rts
 
 ObjectCheckIfOutScreenVertically:
-	; jamais call
 	sec
-	lda objectPosYfraction, x
+	lda objectPosYFraction, x
 	sbc objectYSpeedFraction, x
-	sta $00 ;tmp objectPosYfraction
+	sta $00 ;tmp objectPosYFraction
 	lda objectPosY, x
 	sbc objectYSpeed, x
 	sta $01
-	cmp #$E8        ; Bas de l'écran ?
-	bcc .checkScreenTop   ; no
-	;.screenBottom: ;oui
-		; Todo
-	.checkScreenTop:
-		cmp	#$04       ; Haut de l'écran ?q
-		bcc .screenTop ; oui
-		bcs .end       ; non
-	.screenTop:
-		; todo
+	; .isScreenBottom:
+		cmp #$E8         ; Si screen bottom (posY >= 0xE8)
+		bcc .isScreenTop ; non
+		; todo oui       ; oui
+	.isScreenTop:
+		cmp #$04   ; Si screen top (posY <= 0x04)
+		;bcc       ; oui 
+		bcs .end   ; non
 	.end:
 		clc
 		rts
@@ -1730,13 +1757,13 @@ objectXWidthTable
 
 ;TableObjectYHeightTable2
 playerYHeightTable:
-    .db $0C, $0C, $0C, $0C ;00
-    .db $0C, $0C, $0C, $0C ;
-    .db $0C, $0C, $0C, $0C ;08
-    .db $0C, $0C, $0C, $0C ;
-    .db $0C, $0C, $0C, $0C ;10
-    .db $0C, $0C, $0C, $0C
-	.db $0C, $0C, $0C, $0C
+    .db $14, $14, $14, $14 ;00
+    .db $14, $14, $14, $14 ;
+    .db $14, $14, $14, $14 ;08
+    .db $14, $14, $14, $14 ;
+    .db $14, $14, $14, $14 ;10
+    .db $0c, $0c, $0c, $0c
+	.db $0c, $0c, $0c, $0c ;18
 ;;;;;; Player DATA SPRITE ;;;;;
   .include "data/player.asm"
 
@@ -2506,7 +2533,7 @@ UpdateCurrentTileState:
 	jsr ObjectVerifyBackgroundCollision
 	
 	sec
-	lda objectPosYfraction
+	lda objectPosYFraction
 	sbc objectYSpeedFraction
 	lda objectPosY
 	sbc objectYSpeed
@@ -2579,36 +2606,46 @@ ObjectVerifyBackgroundCollision:
 ; $0d  tmp objectPosX
 ;
 DoCollisionCheckFor:
+	lda $0a; save xpos
+	pha
+
 	lda stageId
 	jsr BankSwitchStage
+
+	pla
+	sta $0a ; restor xpos
 
 	lda $03 ; tmp objectPosY
 	sta $0e ; tmp tmp objectPosY
 	
 	ldx objectId
-	bne .noPlayer
-	; player:
-		lda #$00
-		sta $07
-		ldx #$03
+	bne .analyzeTiles
+
+	lda #$00
+	sta currentTuilesState+1
+	ldx #$03
 	
 	.loop:
 		clc
-		lda $04 ; tmp objectPosX
+		lda $0a ; tmp objectPosX
 		adc XWidthTable, x
 		sta $0D ; tmp objectPosX
-		lda $05 ; tmp objectPosScreen
+		lda $02 ; tmp objectPosScreen
 		adc XWidthTable-1, x
 		sta $0c
 		jsr ReadCurrentStageMap
+		dex
 		sta currentTuilesState,x
 		dex 
 		bpl .loop
 
-	.noPlayer:
-	jsr PreKill
+	.analyzeTiles:
+		jsr AnalyzeTiles
+
+	pha ; on push le resultat
 	lda saveBank
 	jsr BankSwitch
+	pla
 	rts
 
 XWidthTable:
@@ -2779,26 +2816,27 @@ CurrentTileStateTable:
 
 SpikeKill1:
 	jmp KillPlayer
-PreKill:
+AnalyzeTiles:
 	ldx #$02
 	lda #$00
 	sta var96 ; voi si bessoin de var ou non 
 	.loop:
-		lda currentTuilesState, x
+		ldy currentTuilesState, x
 		bpl .dontTransparent
 	; transparent:
 	.dontTransparent:
 		cpy #$03
 		beq SpikeKill2
 		cpy #$01
-		beq .todoBLock1
+		beq .hardBlock
 		cpy #$04
-		bne .next
-	.todoBLock1:
+		bne .nextLoop
+	.hardBlock:
 		ora #$01
-	.next:
+	.nextLoop:
 		dex
 		bpl .loop
+
 		tay
 		ldx objectId
 		bne .end
