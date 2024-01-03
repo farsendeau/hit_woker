@@ -904,15 +904,6 @@ LadderHandler:
 		stx objectYSpeedFraction
 		jsr UpdateCurrentTileState  ; recheck des tuiles 
 		lda tileLadderState
-		;bne .nextClimb
-		;lda objectYSpeed
-		;bpl .release
-		;sec
-		;lda objectPosY
-		;sbc #$07
-		;sta objectPosY
-		;bne .release
-	;.nextClimb:
 		beq .release	
 		jsr ObjectDoCollisionChecksAndAvoidWalls
 		bcs .release 
@@ -1033,6 +1024,7 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		ldx objectId
 		lda $03 ; tmp tmp objectPosY
 		and #$f0 ; On garde le MSB
+		sec
 		sbc $10  ; tmp Y valeur
 		sta objectPosY, x 
 		lda #$00
@@ -2830,13 +2822,13 @@ AnalyzeTiles:
 		cpy #$01
 		beq .hardBlock
 		cpy #$04
-		bne .nextLoop
+		bne .loopNext
 	.hardBlock:
 		ora #$01
-	.nextLoop:
+	.loopNext:
 		dex
 		bpl .loop
-
+	.loopEnd:
 		tay
 		ldx objectId
 		bne .end
