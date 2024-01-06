@@ -1230,21 +1230,34 @@ ObjectUpdateMovementRight:
 
 	.setPos:
 		; POS X
-		sta $02 ; xwidth
+		sta $10 ; xwidth
 		clc
 		lda $05 ; tmp ObjectPosX
-		adc $02 ; posX + width
-		sta $00 ; tmp ObjectPosXfraction
+		adc $10 ; posX + width
+		sta $00 ; tmp tmp objectPosX
 		; POS SCREEN
-		lda $03 ; tmp ObjectPosScreen
+		lda $03  ; tmp ObjectPosScreen
 		adc #$00 ; posScrean + (posX + width)
-		sta $01 ; new ObjectPosScreen
+		sta $01  ; new ObjectPosScreen
 
+		;TODO ne fonctionne pas !!!!!
+	
+		;lda objectPosY, x
+		;sta $03 ; tmp objectPosY
 		; checkBackgroundcollision
-		; TODO
-
-
-	rts
+		;jsr ObjectVerifyBackgroundCollision
+		;beq .end
+		;lda $00   ; tmp tmp objectPosX
+		;and #$f0
+		;ldx objectId
+		;sec
+		;sbc $10
+		;sta $05
+		;lda $01
+		;sbc #$00
+		;sta $03
+	.end:
+		rts
 
 ObjectUpdateMovementLeft:
 	ldx objectId ; objet ID
@@ -2582,15 +2595,18 @@ ObjectVerifyBackgroundCollision:
 		bpl .loop
 
 	jsr AnalyzeCurrentTile
+	
+	pha
 
 	lda saveBank
 	jsr BankSwitch
 
+	pla
+
 	rts
 
 	.enemy:
-
-	rts
+		rts
 
 ;
 ; $0E posY checker
