@@ -19,6 +19,10 @@ pointer .rs 19
 PPU2000value .rs 1
 PPU2001Value .rs 1
 
+tmpPosScreen .rs 1     ; $20   
+tmpPosXFraction .rs 1  ; $21
+tmpPosX .rs 1       ; $22
+
 stageId .rs 1
 currentBank .rs 1
 saveBank .rs 1
@@ -837,9 +841,9 @@ LadderInit:
 	sta objectFireDelay
 	lda ladderPosX 
 	adc #$08
-	sta $05 ; tmp objectPosXfraction
+	sta tmpPosX ; tmp objectPosX
 	lda objectPosScreen
-	sta $03 ; tmp objectPosScreen
+	sta tmpPosScreen ; tmp objectPosScreen
 	jsr AutoCenterScreen
 
 	
@@ -926,10 +930,10 @@ LadderHandler:
 
 AutoCenterScreen:
 		sec
-		lda $05 ; tmp objectPosX
+		lda tmpPosX ; tmp objectPosX
 		sbc #$80  ; centre le perso 
 		sta scrollPosX
-		lda $03 ; tmp objectPosScreen (num écran)
+		lda tmpPosScreen ; tmp objectPosScreen (num écran)
 		sbc #$00 ; - carry
 		cmp currentBeginScreen
 		bmi .isBeginScreen
@@ -949,10 +953,10 @@ AutoCenterScreen:
 		.setDataPos:
 			sec
 			lda objectPosX
-			sbc $05; tmp objectPosX
+			sbc tmpPosX; tmp objectPosX
 			sta $0c; courante bande
 			lda objectPosScreen
-			sbc $03 ; tmp objectPosScreen
+			sbc tmpPosScreen ; tmp objectPosScreen
 			bpl .newStrip
 			sec
 			lda #$00
@@ -974,13 +978,13 @@ AutoCenterScreen:
 ObjectRelocateHorizontally:
 	ldx objectId
 
-	lda $03; tmp objectPosScreen
+	lda tmpPosScreen; tmp objectPosScreen
 	sta objectPosScreen, x
 
-	lda $04 ; tmp objectPosXFraction
+	lda tmpPosXFraction ; tmp objectPosXFraction
 	sta objectPosXfraction, x
 
-	lda $05 ; tmp ObjectPosX
+	lda tmpPosX ; tmp ObjectPosX
 	sta objectPosX, x
 
 	rts	
@@ -1189,7 +1193,7 @@ ObjectUpdateMovementRight:
 	clc
 	lda objectPosXfraction, x
 	adc objectXSpeedFraction, x
-	sta $04; tmp ObjectPosXFraction 
+	sta tmpPosXFraction; tmp ObjectPosXFraction 
 	; ObjectPosX
 	lda objectPosX, x
 	adc objectXSpeed, x ; posX + Xspeed
@@ -1216,8 +1220,8 @@ ObjectUpdateMovementRight:
 		;todo
 
 	.setObjectPosScrenAndPosX:
-		sta $03 ; tmp objectPosScreen
-		sty $05 ; tmp objectPosX
+		sta tmpPosScreen ; tmp objectPosScreen
+		sty tmpPosX ; tmp objectPosX
 
 	; Collision background
 	ldy objectSpriteNum, x
@@ -1232,30 +1236,30 @@ ObjectUpdateMovementRight:
 		; POS X
 		sta $10 ; xwidth
 		clc
-		lda $05 ; tmp ObjectPosX
+		lda tmpPosX ; tmp ObjectPosX
 		adc $10 ; posX + width
 		sta $00 ; tmp tmp objectPosX
 		; POS SCREEN
-		lda $03  ; tmp ObjectPosScreen
+		lda tmpPosScreen  ; tmp ObjectPosScreen
 		adc #$00 ; posScrean + (posX + width)
 		sta $01  ; new ObjectPosScreen
 
 		;TODO ne fonctionne pas !!!!!
 	
-		;lda objectPosY, x
-		;sta $03 ; tmp objectPosY
+		lda objectPosY, x
+		sta $03 ; tmp objectPosY
 		; checkBackgroundcollision
-		;jsr ObjectVerifyBackgroundCollision
-		;beq .end
-		;lda $00   ; tmp tmp objectPosX
-		;and #$f0
-		;ldx objectId
-		;sec
-		;sbc $10
-		;sta $05
-		;lda $01
-		;sbc #$00
-		;sta $03
+		jsr ObjectVerifyBackgroundCollision
+		beq .end
+		lda $00   ; tmp tmp objectPosX
+		and #$f0
+		ldx objectId
+		sec
+		sbc $10
+		sta tmpPosX
+		lda $01
+		sbc #$00
+		sta tmpPosScreen
 	.end:
 		rts
 
@@ -1265,7 +1269,7 @@ ObjectUpdateMovementLeft:
 	sec
 	lda objectPosXfraction, x
 	sbc objectXSpeedFraction, x
-	sta $04; tmp ObjectPosXFraction 
+	sta tmpPosXFraction; tmp ObjectPosXFraction 
 	; ObjectPosX
 	lda objectPosX, x
 	sbc objectXSpeed, x ; posX - Xspeed
@@ -1295,8 +1299,8 @@ ObjectUpdateMovementLeft:
 		stx currentStripeEndType 
 		ldx #$00
 	.setObjectPosScrenAndPosX:
-		sta $03 ; tmp objectPosScreen
-		sty $05 ; tmp objectPosX
+		sta tmpPosScreen ; tmp objectPosScreen
+		sty tmpPosX ; tmp objectPosX
 
 	; Collision background
 	ldy objectSpriteNum, x
@@ -1311,10 +1315,10 @@ ObjectUpdateMovementLeft:
 		; POS X
 		;sta $02
 		;sec
-		;lda $05 ; tmp objectPosX
+		;lda tmpPosX ; tmp objectPosX
 		;sbc $02 ; posX + width
 		;sta $00 ; new objectPosx
-		;sta $04 ; tmp ObjectPosXfraction
+		;sta tmpPosXFraction ; tmp ObjectPosXfraction
 		; POS SCREEN
 		;lda $03; tmp ObjectPosScreen
 		;sbc $00 ; posScreen - (posX - width)
@@ -1324,7 +1328,7 @@ ObjectUpdateMovementLeft:
 		; TODO	
 		; a supprimer 
 		;lda $00
-		;sta $05
+		;sta tmpPosX
 		;lda $01
 		;sta $03
 	rts
@@ -1755,7 +1759,9 @@ xSpeedAndFraction1:
     .db $00,$20,$21,$80,$01,$04,$15,$51,$61,$90 
 
 playerXWidthTable
-    .db $08, $08, $08, $08 ;00	
+    .db $08, $08, $08, $08 ;00
+	.db $08, $08, $08, $08 ;
+	.db $08, $08, $08, $08 ;08
 
 objectXWidthTable
     .db $08, $08, $08, $08 ;00
