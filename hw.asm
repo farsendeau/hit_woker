@@ -45,7 +45,8 @@ currentBeginScreen .rs 1 ; la premier bande de l'écran (4 sprite de largeur)
 currentEndScreen .rs 1 ; la dernier bande de l'écran (4 sprite de largeur) 
 currentOrderNum .rs 1 ; l'ordre d'affichage de la room
 currentRoomPointer .rs 4
-currentStripeEndType .rs 1
+currentStripeEndType .rs 1 ;0=right 1=up 2=left 3=down  
+
 tileLadderState .rs 1 ; state pour l'échelle  (CurrentTileState)
 currentTuilesState .rs 3 ; state des tuiles du dessus et en dessous
 ladderPosX .rs 1
@@ -1058,10 +1059,25 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		clc
 		adc #$01 ; add 1 px pour le check
 		jsr ObjectCollisionCheckHelper
-		lda #$00
 		beq .setterPos
 		;collision
-		
+		ldx objectId
+		cmp #$20
+		beq .resetYSpeed
+		lda $03 ; tmp tmp objectPosY (tmp object Y + A)
+		and #$f0
+		clc
+		adc #$10
+		clc
+		adc $10
+		sta objectPosY, x
+		lda #$00
+		sta objectPosYFraction, x
+		lda #$ff
+		sta objectYSpeed, x
+		lda #$40
+		sta objectYSpeedFraction, x
+		bne .resetYSpeed
 	.speedMI:
 		lda $10
 		jsr ObjectCollisionCheckHelper
@@ -1075,7 +1091,7 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		sta objectPosY, x 
 		lda #$00
 		sta objectPosYFraction, x
-	.setYSpeedMi:
+	.resetYSpeed:
 		lda #$ff
 		sta objectYSpeed, x
 		lda #$40
@@ -1129,11 +1145,33 @@ ObjectCheckIfOutScreenVertically:
 	; .isScreenBottom:
 		cmp #$E8         ; Si screen bottom (posY >= 0xE8)
 		bcc .isScreenTop ; non
-		; todo oui       ; oui
+		cmp $f8          ; alors si screen bottom (posY <= 0xF8)
+		bcs .posYSUPF8   ; oui c'est pas bon pour le perso
+		lda #$03
+		bne .false
 	.isScreenTop:
 		cmp #$04   ; Si screen top (posY <= 0x04)
-		;bcc       ; oui 
+		bcc .false ; oui 
 		bcs .end   ; non
+	.posYSUPF8:
+		cmp #$FC 
+		bcs .end 
+		; Y >= #$F8 but < #$FC
+		cpx #$00
+		bne .setCurrentStripeEndType
+		lda objectYSpeed
+		bmi .setCurrentStripeEndType
+		lda objectPosYFraction
+		sta $00
+		lda objectPosY
+		sta $01
+	.setCurrentStripeEndType:
+		cpx #$00
+		bne .false
+		sta currentStripeEndType
+	.false:
+		sec
+		rts	
 	.end:
 		clc
 		rts
@@ -1812,7 +1850,7 @@ objectXWidthTable
 playerYHeightTable:
     .db $14, $14, $14, $14 ;00
     .db $14, $14, $14, $14 ;
-    .db $14, $14, $14, $14 ;08
+    .db $14, $0c, $14, $14 ;08
     .db $14, $14, $14, $14 ;
     .db $14, $14, $14, $14 ;10
     .db $0c, $0c, $0c, $0c
