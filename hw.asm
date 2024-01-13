@@ -21,7 +21,8 @@ PPU2001Value .rs 1
 
 tmpPosScreen .rs 1     ; $20   
 tmpPosXFraction .rs 1  ; $21
-tmpPosX .rs 1       ; $22
+tmpPosX .rs 1          ; $22
+tmpPosY .rs 1          ; $2D 
 
 stageId .rs 1
 currentBank .rs 1
@@ -80,8 +81,6 @@ bossBlinkState .rs 1
 
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 var7B .rs 1
-var9b .rs 1 ; LiftUnknown9B
-var96 .rs 1
 
 
   .rsset $0100
@@ -738,37 +737,65 @@ PlayerIA:
 		jsr AutoCenterScreen
 		jsr UpdateCurrentTileState
 	
-	.pressB:
-		lda joyPad
-		and #$02
-		beq .checkSpeed
-		; jsr PlayerWeaponFire
+	.pressB: ; shoot 
+		lda joyD
+		and #$02             ; si press b
+		beq .checkSpeed      ; non
+		;jsr PlayerWeaponFire ; oui
 	.checkSpeed:
 		lda objectYSpeed
 		bmi .speedMi     ; si FF
-	.speedPlus:	
 		jsr ObjectDoCollisionChecksAndAvoidWalls
 		bcs .goEnd
 		lda joyPad
-		and #$01   ; si press A
-		; beq todo $9551
-		jmp .jumpInit
+		and #$01 ; continue press A jump
+		beq	.fallingJump
+		jmp .continueJump
 	.goEnd:
 		jmp .end
+	.fallingJump:
+		lda objectYSpeed
+		bmi .goJump
+		cmp #$01
+		bcc .goJump
+		beq .goJump
+		lda #$01
+		sta objectYSpeed
+		lda #$00
+		sta objectYSpeedFraction
+	.goJump:	
+		jmp .continueJump
 
 	.speedMi:
-		lda #$00 ; todo testIsRiding
-		JSR ObjectDoCollisionChecksAndAvoidWalls
-		
+		; voir le retour de TestReding
+		lda #$00
+		pha
+		jsr ObjectDoCollisionChecksAndAvoidWalls
+		bcs .jumpInit
+		; collision
 
-	.jumpInit:
+	.jumpInit: ; todo mal nommé
+		pla 
 		lda objectSpriteNum
 		cmp #$09 ; saut/chute
-		;beq  ; TODO jumping/falling
-	
-	
+		beq .jumpSound  ; TODO jumping/falling
+		cmp #$6f ; shoot en jump
+		bne .jumpCheckPosY
+	.jumpSound:
+		; lda sound id
+		; jsr playsound
+	.jumpCheckPosY:
+		lda tmpPosY
+		cmp objectPosY
+		bcs .setTmpPosY
+		;check shake player
+	.setTmpPosY:	
+		lda objectPosY
+		sta tmpPosY
+
+
 	; Mouvement si A n'est pas pressé
-	lda joyPad
+	lda joyD
 	and #$01
 	bne .makeJump
 	;si player n'est pas en mouvement
@@ -825,7 +852,11 @@ PlayerIA:
 		lda #$df
 		sta objectYSpeedFraction
 		rts
-	
+	.continueJump:
+		lda #$09
+		sta objectSpriteNum
+		lda #$00
+		sta objectActionStateCounter
 	.end:
 		rts
 
@@ -852,7 +883,7 @@ LadderHandler:
 	lda #$15 ; action on Ladder
 	sta objectSpriteNum
 	; presse bouton B
-	lda joyPad
+	lda joyD
 	and #$02
 	bne .presseB
 	; press up, down ou A
@@ -993,7 +1024,18 @@ ObjectDoCollisionChecksAndAvoidWalls:
 	ldx objectId
 	jsr ObjectCheckIfOutScreenVertically
 	bcc .isPlayer
+	ldx objectId
+	bne .todo
 	; todo player tombe en dehors de l'écran
+	lda objectFlags
+	and #$10 ; climb ?
+	beq .checkPlayerEnemyHeight
+	clc
+	rts
+	.todo:
+		lda #$ff
+		sta currentTuilesState+1
+		rts
 	.isPlayer:
 		cpx #$00 ; Si c'est player
 		beq .checkPlayerEnemyHeight 
@@ -2833,7 +2875,6 @@ SpikeKill1:
 AnalyzeTiles:
 	ldx #$02
 	lda #$00
-	sta var96 ; voi si bessoin de var ou non 
 	.loop:
 		ldy currentTuilesState, x
 		bpl .dontTransparent
@@ -3341,17 +3382,17 @@ ReadJoyPad:
 	
 	.loopButton:
 		ldy #08
-		.loopPad:
-			lda $4016, x
-			sta joyD
-			lsr a
-			ora joyD
-			lsr a
-			ror joyPad, x
-			dey
-			bne .loopPad
-			dex
-			bpl .loopButton
+	.loopPad:
+		lda $4016, x
+		sta joyD
+		lsr a
+		ora joyD
+		lsr a
+		ror joyPad, x
+		dey
+		bne .loopPad
+		dex
+		bpl .loopButton
 		
 	rts
 
