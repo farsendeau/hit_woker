@@ -101,6 +101,7 @@ bGPalettes     .rs 16
 spritePalettes .rs 16
 unknownPalettes .rs 16
 
+  .rsset $0400
 ; 0x20 = 32d
 objectSpriteNum     .rs 32
 objectFlags         .rs 32
@@ -773,6 +774,8 @@ PlayerIA:
 		pha
 		jsr ObjectDoCollisionChecksAndAvoidWalls
 		bcs .jumpInit
+		pla
+		jmp .continueJump
 		; collision
 
 	.jumpInit: ; todo mal nommé
@@ -1323,9 +1326,6 @@ ObjectUpdateMovementRight:
 		lda tmpPosScreen  ; tmp ObjectPosScreen
 		adc #$00 ; posScrean + (posX + width)
 		sta $01  ; new ObjectPosScreen
-
-		;TODO ne fonctionne pas !!!!!
-	
 		lda objectPosY, x
 		sta $03 ; tmp objectPosY
 		; checkBackgroundcollision
