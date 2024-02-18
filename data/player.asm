@@ -18,7 +18,7 @@ metaSpritesActionTable:
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionHitGround
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
@@ -46,9 +46,13 @@ metaSpritesActionLadder:
 metaSpritesActionLadderTop:
 	.db $00, $06, $06
 
-; sprite du run2
+; sprite du run1
 metaSpritesActionJump:
 	.db $00, $02
+
+; sprite du run2
+metaSpritesActionHitGround:
+	.db $00, $03
 
 ;
 ; Pour dataSpriteXX

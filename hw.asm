@@ -103,23 +103,23 @@ unknownPalettes .rs 16
 
   .rsset $0400
 ; 0x20 = 32d
-objectSpriteNum     .rs 32
-objectFlags         .rs 32
-objectActionStateCounter .rs 32 ; compter changement d'état d'une action; ObjectUnknown440
-objectPosScreen      .rs 32 ; bande dans laquelle le l'objet est
-objectCurrentScreen .rs 32 ; Numéro de l'écran ou se trouve l'object
-objectPosX          .rs 32 ; Pos x de l'objet en px
-objectPosXfraction  .rs 32
-objectXSpeed        .rs 32
-objectXSpeedFraction .rs 32
-objectPosY          .rs 32
-objectPosYFraction  .rs 32
-objectFireDelay     .rs 32
-objectYSpeedFraction .rs 32
-objectYSpeed        .rs 32
-objectLifeCycleCounter .rs 32
-objectLifeMeter     .rs 32
-ObjectType          .rs 32 ; enemi ID
+objectSpriteNum     .rs 32 ;400
+objectFlags         .rs 32 ;420
+objectActionStateCounter .rs 32 ;440  compter changement d'état d'une action; ObjectUnknown440
+objectPosScreen      .rs 32 ; 460 bande dans laquelle le l'objet est
+objectCurrentScreen .rs 32 ; 480 Numéro de l'écran ou se trouve l'object
+objectPosX          .rs 32 ; 4a0 Pos x de l'objet en px
+objectPosXfraction  .rs 32 ; 4c0
+objectXSpeed        .rs 32 ; 4e0 
+objectXSpeedFraction .rs 32 ;500
+objectPosY          .rs 32  ;520
+objectPosYFraction  .rs 32 ; 540
+objectFireDelay     .rs 32 ; 560
+objectYSpeedFraction .rs 32 ; 580
+objectYSpeed        .rs 32 ; 5a0
+objectLifeCycleCounter .rs 32 ;5c0
+objectLifeMeter     .rs 32 ; 5e0
+ObjectType          .rs 32 ; enemi ID ; 600
 
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
@@ -623,10 +623,11 @@ StageBeginFromDeath:
 	lda #$80 ; milieu de l'écrant "0x80 = 128d (32x8)/2"
 	sta objectPosX
 	;sta $22 ; posX Current du player ?
-	lda #$AC ; d244
+	lda #$AB ;
 	sta objectPosY
 	lda #$ff
 	sta objectXSpeed
+	sta objectYSpeed
 
 	jsr UpdateGraphics
 
@@ -698,8 +699,9 @@ PlayerIA:
 
 	.dontWalking:
 		lda #$00
-		sta playerWalkTimer
 		sta playerStandingTimer
+		sta playerWalkTimer
+		
 	
 	; Si gauche/droite est appuyé pendant cette frame
 	;  
@@ -744,6 +746,7 @@ PlayerIA:
 		and #$02             ; si press b
 		beq .checkSpeed      ; non
 		;jsr PlayerWeaponFire ; oui
+		; bne +
 	.checkSpeed:
 		lda objectYSpeed
 		bmi .speedMi     ; si FF
@@ -778,13 +781,15 @@ PlayerIA:
 		jmp .continueJump
 		; collision
 
-	.jumpInit: ; todo mal nommé
+	.jumpInit: ; todo mal nommé genre checkJump
 		pla 
 		lda objectSpriteNum
 		cmp #$09 ; saut/chute
 		beq .jumpSound  ; TODO jumping/falling
 		cmp #$6f ; shoot en jump
 		bne .jumpCheckPosY
+		lda #$09
+		sta objectSpriteNum
 	.jumpSound:
 		; lda sound id
 		; jsr playsound
@@ -796,35 +801,53 @@ PlayerIA:
 	.setTmpPosY:	
 		lda objectPosY
 		sta tmpPosY
-
+	
 
 	; Mouvement si A n'est pas pressé
 	lda joyD
 	and #$01
 	bne .makeJump
+	
 	;si player n'est pas en mouvement
 	lda objectFlags
 	and #$80
-	bne .inMove
-	; et si touche droite/gauche n'est pas pressée à la frame précédente
+	bne .inMove 
+
+	; et si touche droite/gauche est pressée à la frame précédente
 	lda joyPadOld
-	cmp #$c0
+	and #$c0
 	bne .running ; true
-		; todo jump
-		rts ; END
-	.running:
+
+	; si left/right n'est pas pressé dans la frame d'avant
+	lda objectSpriteNum
+	cmp #$09 ; jump / falling
+	bne .goEnd1
+	; si en l'air
+	lda #$00
+	lda #$0f
+	bne .setSpriteNum
+
+	.running: 
 		lda objectSpriteNum
 		cmp #$06 ; running
-		bne .makeStand
+		bne .goEnd2    
 		; on fait ralentir le player
 		lda #$0C ; slow down
+	.setSpriteNum:
 		sta objectSpriteNum
 		lda #$01
 		sta objectActionStateCounter
+	.goEnd1:	
 		; from 95D5: was not in a jumping state
 		lda objectActionStateCounter
 		bne .end ; END
-	.inMove:
+	.goEnd2:
+		lda #$00 ; standing
+		sta objectSpriteNum
+		sta objectActionStateCounter
+		beq .end
+	
+	.inMove: 
 		lda objectSpriteNum
 		cmp #$09 ; saut/chute
 		beq .makeRun ; true
@@ -833,29 +856,24 @@ PlayerIA:
 		lda objectActionStateCounter
 		cmp #$22
 		bne .end ; false
-		; Make run
-		lda #$06
-		sta objectSpriteNum
-		lda #$00
-		sta objectActionStateCounter ; première action
 
-		rts ; fin
 	.makeRun:
 		lda #$06
 		sta objectSpriteNum
-		lda #$00
-		sta objectActionStateCounter
-	.makeStand:
+		;lda #$00
+		;sta objectActionStateCounter
+	.makeRunningEnd:
 		lda #$00 ; standing
-		sta objectSpriteNum
 		sta objectActionStateCounter
 		rts ; END
+
 	.makeJump:
 		lda #$04
 		sta objectYSpeed
 		lda #$df
 		sta objectYSpeedFraction
 		rts
+
 	.continueJump:
 		lda #$09
 		sta objectSpriteNum
