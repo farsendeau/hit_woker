@@ -802,7 +802,6 @@ PlayerIA:
 		lda objectPosY
 		sta tmpPosY
 	
-
 	; Mouvement si A n'est pas pressé
 	lda joyD
 	and #$01
@@ -1868,7 +1867,7 @@ objectXWidthTable
 playerYHeightTable:
     .db $14, $14, $14, $14 ;00
     .db $14, $14, $14, $14 ;
-    .db $14, $0c, $14, $14 ;08
+    .db $14, $14, $14, $14 ;08
     .db $14, $14, $14, $14 ;
     .db $14, $14, $14, $14 ;10
     .db $0c, $0c, $0c, $0c
