@@ -1,4 +1,39 @@
 ;
+; Permet d'obtenir l'ID du tableau XSpeedANdFraction 
+;   pour l'état de l'action en cours
+;   
+xSpeedAndFractionStateTable:
+    .byte $00,$03,$06,$0C,$0F,$12,$13,$14,$6E
+
+xSpeedAndFractionIdTable:
+    .byte $00,$01,$08,$03,$00,$09,$01,$00,$00
+
+;
+; Table de valeurs pour objectXSpeed et objectXSpeedFraction
+; MSB XSpeedFraction
+; LSB XSpeed
+; 
+xSpeedAndFraction1:
+    .db $00,$20,$21,$80,$01,$04,$15,$51,$61,$90 
+
+playerXWidthTable
+    .db $08, $08, $08, $08 ;00
+	.db $08, $08, $08, $08 ;
+	.db $08, $08, $08, $08 ;08
+	.db $08, $08, $08, $08 ;
+	.db $08, $08, $08, $08 ;10
+
+;TableObjectYHeightTable2
+playerYHeightTable:
+    .db $14, $14, $14, $14 ;00
+    .db $14, $14, $14, $14 ;
+    .db $14, $0c, $14, $14 ;08
+    .db $14, $14, $14, $14 ;
+    .db $14, $14, $14, $14 ;10
+    .db $14, $14, $14, $14
+	.db $10, $00, $14, $14 ;18
+
+;
 ; Pour metaSpritesActionXX
 ;     00 : Frame avant changement de state (genre perso qui cligne des yeux)
 ;     01-xx : une action peu avoir plusieurs metaSprite, c'est l'id du metaSprite (dataMetaSpriteXX)
@@ -52,7 +87,7 @@ metaSpritesActionJump:
 
 ; sprite du run2
 metaSpritesActionHitGround:
-	.db $00, $03
+	.db $00, $07, $07 
 
 ;
 ; Pour dataSpriteXX
@@ -70,8 +105,8 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteLadderClimb1
 	.dw dataMetaSpriteLadderClimb2
 	.dw dataMetaSpriteLadderTop
+	.dw dataMetaSpriteHitGround
 
-	
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
 	.db $00 ;offsetLanding
@@ -84,7 +119,6 @@ dataMetaSpriteStanding:
 	.db $21, $00 
 	.db $30, $00 
 	.db $31, $00
-
 
 dataMetaSpriteMovingSlowly:
 	.db $09 ; 9 sprite
@@ -128,7 +162,7 @@ dataMetaSpriteMovingRun2:
 	.db $38, $00
 
 dataMetaSpriteLadderClimb1:
-	.db $07 ; 8 sprite
+	.db $07 ; 7 sprites
 	.db $03 ;offsetLadder
 	.db $08, $00
 	.db $09, $00
@@ -139,7 +173,7 @@ dataMetaSpriteLadderClimb1:
 	.db $3a, $00
 
 dataMetaSpriteLadderClimb2:
-	.db $07 ; 8 sprite
+	.db $07 ; 7 sprites
 	.db $04 ;offsetLadder2
 	.db $08, $40
 	.db $09, $40
@@ -158,6 +192,21 @@ dataMetaSpriteLadderTop:
 	.db $2c, $00
 	.db $3a, $00
 
+dataMetaSpriteHitGround:
+	.db $0c ; 12 sprites
+	.db $05 ; offsetHitGround
+	.db $05, $00
+	.db $06, $00
+	.db $07, $00 
+	.db $17, $00 
+	.db $18, $00 
+	.db $19, $00 
+	.db $26, $00 
+	.db $27, $00 
+	.db $28, $00
+	.db $36, $00
+	.db $37, $00
+	.db $38, $00
 
 offsetTable:
 	.dw offsetStanding
@@ -165,8 +214,8 @@ offsetTable:
 	.dw offsetMovingRun2
 	.dw offsetLadder
 	.dw offsetLadder2
+	.dw offsetHitGround
 
-	
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
 ;
@@ -180,8 +229,8 @@ offsetLadder:
     .db $0c, $0d, $0e, $0f, $10, $11, $13 
 offsetLadder2:
     .db $0d, $0c, $0f, $0e, $11, $10, $12
-
-
+offsetHitGround: 
+	.db $17, $18, $19, $09, $00, $01, $02, $03, $04, $1a, $05, $1b
 ;
 ; Décalage de pixel
 ; 00 = f4
@@ -189,13 +238,13 @@ offsetLadder2:
 ; 10 = 04
 ; 18 = 0c
 ;
-;        00   01   02   03   04   05   06   07   08   09   0a   0b   0c   0d   0e   0f   10   11   12   13   14   15   16
+;        00   01   02   03   04   05   06   07   08   09   0a   0b   0c   0d   0e   0f   10   11   12   13   14   15   16  17    18    19  1a
 offsetRightX:
-   ;    $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10, $08, $00, $08, $00, $08, $00, $08, $00, $10, $08, $00
-	.db $fc, $f4, $04, $fc, $f4, $fc, $f4, $fc, $f4, $04, $04, $04, $00, $f8, $00, $f8, $00, $f8, $00, $f8, $04, $fc, $f4 
+   ;    $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10, $08, $00, $08, $00, $08, $00, $08, $00, $10, $08, $00, $00, 
+	.db $fc, $f4, $04, $fc, $f4, $fc, $f4, $fc, $f4, $04, $04, $04, $00, $f8, $00, $f8, $00, $f8, $00, $f8, $04, $fc, $f4, $04, $fc, $f4, $04, $f4
 offsetLeftX:
-	;   $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00, $00, $08, $00, $08, $00, $08, $00, $08, $00, $08, $10
-	.db $fc, $04, $f4, $fc, $04, $fc, $04, $fc, $04, $f4, $f4, $f4, $f8, $00, $f8, $00, $f8, $00, $f8, $00, $f4, $fc, $04
+	;   $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00, $00, $08, $00, $08, $00, $08, $00, $08, $00, $08, $10, $10,
+	.db $fc, $04, $f4, $fc, $04, $fc, $04, $fc, $04, $f4, $f4, $f4, $f8, $00, $f8, $00, $f8, $00, $f8, $00, $f4, $fc, $04, $f4, $fc, $04, $f4, $04
 offsetY:
-	;   $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18, $f4, $f4, $fc, $fc, $04, $04, $0c, $0c, $00, $18, $18
-	.db $f4, $f4, $fc, $fc, $fc, $04, $04, $0c, $0c, $f4, $04, $0c, $f4, $f4, $fc, $fc, $04, $04, $0c, $0c, $f4, $0c, $0c
+	;   $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18, $f4, $f4, $fc, $fc, $04, $04, $0c, $0c, $00, $18, $18, xx
+	.db $f4, $f4, $fc, $fc, $fc, $04, $04, $0c, $0c, $f4, $04, $0c, $f4, $f4, $fc, $fc, $04, $04, $0c, $0c, $f4, $0c, $0c, $ec, $ec, $ec, $04, $04

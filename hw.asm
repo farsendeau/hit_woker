@@ -55,7 +55,7 @@ scrollPosX      .rs 1
 scrollPosScreen .rs 1
 scrollPosY      .rs 1
 screenMovedFlag .rs 1
-;Bit 0: (&01) = Nouvel enemi peut être chargé (le screen a bougé)
+;Bit 0: (&01) = Nouvel ennemi peut être chargé (le screen a bougé)
 ;Bit 6: (&40) = Mouvement 4=avant 0=arrière
 
 
@@ -119,7 +119,7 @@ objectYSpeedFraction .rs 32 ; 580
 objectYSpeed        .rs 32 ; 5a0
 objectLifeCycleCounter .rs 32 ;5c0
 objectLifeMeter     .rs 32 ; 5e0
-ObjectType          .rs 32 ; enemi ID ; 600
+ObjectType          .rs 32 ; ennemi ID ; 600
 
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
@@ -560,7 +560,7 @@ StageBeginFromDeath:
 	pla
 	sta objectCurrentScreen
 	jsr ScrollProcess
-	; update enemi
+	; update ennemi
 	pla
 	tax ; x = stageId
 	lda firstScreenEnemyPointer, x
@@ -1024,7 +1024,7 @@ AutoCenterScreen:
 		; go direct ObjectRelocateHorizontally
 
 ;
-; Doit être suivi par 
+; Doit être précédé par 
 ; AutoCenterScreen
 ;
 ObjectRelocateHorizontally:
@@ -1078,7 +1078,7 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		EOR #$ff ; Si A = 0x0c alors EOR = F3
 		clc
 		adc #$01 ; add 1 px pour le check
-		jsr ObjectCollisionCheckHelper
+		jsr ObjectCollisionCheckHelper ; ici problème
 		beq .setterPos
 		;collision
 		ldx objectId
@@ -1145,7 +1145,7 @@ ObjectDoCollisionChecksAndAvoidWalls:
 ; A = tmp Y valeur à ajouter
 ObjectCollisionCheckHelper:
 	clc
-	adc $01 ; tmp objectPosY
+	adc $01 ; tmp objectPosY  ; setté dans ObjectCheckIfOutScreenVertically
 	sta $03 ; tmp tmp objectPosY (tmp object Y + A) 
 	lda objectPosScreen, x
 	sta $02 ; tmp objectPosScreen
@@ -1198,7 +1198,7 @@ ObjectCheckIfOutScreenVertically:
 
 ScrollingLeft:
 	; init du mouvement gauche
-	; Un enemi peut être chargé
+	; Un ennemi peut être chargé
 	lda #$01
 	sta screenMovedFlag
 	; reset du tsaPPUTransfer
@@ -1230,7 +1230,7 @@ ScrollingLeft:
 
 ScrollingRight:
 	; init du mouvemnet droite
-	; Un enemi peut être chargé
+	; Un ennemi peut être chargé
 	lda #$41
 	sta screenMovedFlag
 	; reset du tsaPPUTransfer
@@ -1304,7 +1304,7 @@ ObjectUpdateMovementRight:
 
 	ldx objectId
 	beq .player ; si player
-	; enemi
+	; ennemi
 	;  TODO
 	.player:
 	cmp currentEndScreen ; le player est ou par rapport au dernier écran
@@ -1317,7 +1317,11 @@ ObjectUpdateMovementRight:
 		bcc .setObjectPosScrenAndPosX
 
 	.updateStripe:
-		;todo
+		lda currentEndScreen
+		ldy #$ef
+		ldx #$02
+		stx currentStripeEndType
+		ldx $00
 
 	.setObjectPosScrenAndPosX:
 		sta tmpPosScreen ; tmp objectPosScreen
@@ -1377,7 +1381,7 @@ ObjectUpdateMovementLeft:
 
 	ldx objectId
 	beq .player ; si player
-	; enemi
+	; ennemi
 	;  TODO
 	.player:
 	cmp currentBeginScreen ; le player est ou par rapport au premier écran
@@ -1410,25 +1414,46 @@ ObjectUpdateMovementLeft:
 
 	.setPos:
 		; POS X
-		;sta $02
-		;sec
-		;lda tmpPosX ; tmp objectPosX
-		;sbc $02 ; posX + width
-		;sta $00 ; new objectPosx
-		;sta tmpPosXFraction ; tmp ObjectPosXfraction
+		sta $10 ; xwidth
+		sec
+		lda tmpPosX ; tmp ObjectPosX
+		sbc $10 ; posX + width
+		sta $00 ; tmp tmp objectPosX
 		; POS SCREEN
-		;lda $03; tmp ObjectPosScreen
-		;sbc $00 ; posScreen - (posX - width)
-		;sta $01 ; new objectPosScreen
-
+		lda tmpPosScreen  ; tmp ObjectPosScreen
+		sbc #$00 ; posScrean + (posX + width)
+		sta $01  ; new ObjectPosScreen
+		lda objectPosY, x
+		sta $03 ; tmp objectPosY
 		; checkBackgroundcollision
-		; TODO	
-		; a supprimer 
-		;lda $00
-		;sta tmpPosX
-		;lda $01
-		;sta $03
-	rts
+		jsr ObjectVerifyBackgroundCollision
+		beq .end
+		clc
+		lda $10
+		adc #$10
+		sta $0f
+
+		lda $00
+		and #$f0
+		clc
+		adc $0f
+		sta tmpPosX
+		lda $01
+		adc #$00
+		sta tmpPosScreen
+	.end:
+		rts
+
+
+		lda $00   ; tmp tmp objectPosX
+		and #$f0
+		ldx objectId
+		sec
+		sbc $10
+		sta tmpPosX
+		lda $01
+		sbc #$00
+		sta tmpPosScreen
 
 HandleSpeed:
 	ldy #$00
@@ -1818,7 +1843,7 @@ firstScreenScreenTable:
     .db $00, $18 ; point A
 
 firstScreenEnemyPointer: 
-    .byte $00,$FF; nombre d'enemie sur l'écran de dépare
+    .byte $00,$FF; nombre d'ennemi sur l'écran de dépare
     ; checkpoint
     .byte $00,$11
 
@@ -1837,41 +1862,14 @@ dataTitle:
   .org $A000
 
 
-;
-; Permet d'obtenir l'ID du tableau XSpeedANdFraction 
-;   pour l'état de l'action en cours
-;   
-xSpeedAndFractionStateTable:
-    .byte $00,$03,$06,$0C,$0F,$12,$13,$14,$6E
-
-xSpeedAndFractionIdTable:
-    .byte $00,$01,$08,$03,$00,$09,$01,$00,$00
-
-;
-; Table de valeurs pour objectXSpeed et objectXSpeedFraction
-; MSB XSpeedFraction
-; LSB XSpeed
-; 
-xSpeedAndFraction1:
-    .db $00,$20,$21,$80,$01,$04,$15,$51,$61,$90 
-
-playerXWidthTable
+;;;;;; Object DATA SPRITE ;;;;;
+objectXWidthTable
     .db $08, $08, $08, $08 ;00
 	.db $08, $08, $08, $08 ;
 	.db $08, $08, $08, $08 ;08
+	.db $08, $08, $08, $08 ;
+	.db $08, $08, $08, $06 ;10
 
-objectXWidthTable
-    .db $08, $08, $08, $08 ;00
-
-;TableObjectYHeightTable2
-playerYHeightTable:
-    .db $14, $14, $14, $14 ;00
-    .db $14, $14, $14, $14 ;
-    .db $14, $14, $14, $14 ;08
-    .db $14, $14, $14, $14 ;
-    .db $14, $14, $14, $14 ;10
-    .db $0c, $0c, $0c, $0c
-	.db $0c, $0c, $0c, $0c ;18
 ;;;;;; Player DATA SPRITE ;;;;;
   .include "data/player.asm"
 
@@ -2770,7 +2768,7 @@ XWidthTable:
 ;     $0b: 1 tuile  ...
 ; 
 blockHeightTable:
-	.db $f4, $fc, $0d
+	.db $f4, $fc, $0b
 
 
 AnalyzeCurrentTile:
