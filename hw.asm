@@ -1100,7 +1100,7 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		bne .resetYSpeed
 	.speedMI:
 		lda $10
-		jsr ObjectCollisionCheckHelper
+		jsr ObjectCollisionCheckHelper ; ici ça pos problème
 		beq .setterPos
 		; todo si collision A voir parce que pas collision
 		ldx objectId
