@@ -645,9 +645,63 @@ MainLoop:
 	; todo gestion du run
 
 	jsr UpdateGraphics
-	jsr NextFrame
 
-	JMP MainLoop
+
+	; scrolling vertical
+	lda currentStripeEndType
+	bne CheckStripeEnding
+
+	MainLoopEndCurrentFrame:
+		jsr NextFrame
+		JMP MainLoop
+
+
+; A = currentStripeEndType (0=right 1=up 2=left 3=down)  
+CheckStripeEnding:
+	cmp #$01
+	bne .scroll
+	; todo teleport
+	;lda TeleportEnteredFlag
+
+	lda objectFlags
+	and #$10 ; si sur une échelle
+	beq .next 
+	.onLadder:
+		lda currentStripeEndType
+		ldx scrollPosX
+		bne .next
+		ldx scrollPosScreen ; id écran
+		cpx currentBeginScreen  ; si écran du début
+		bne .isEndBeginScreen
+	.isBeginScreen:
+		; todo	
+	.isEndBeginScreen:
+		cpx currentEndScreen ; si écran de fin
+		bne .next ; non
+	    ldy currentOrderNum ; id écran courrant layout
+		jsr RoomLayoutLoadRoomNum; retourne A = id ROOM_LAYOUT_TABLE
+		ldy currentStripeEndType
+		and shutterTable, y
+		bne ScrollPreviousRoom
+	.scroll:
+		ldx scrollPosX
+	.next:
+		; pas sur une échelle
+		lda currentStripeEndType
+	.killPlayer:
+	
+	.end:
+		lda #$00
+		sta currentStripeEndType
+		jmp MainLoopEndCurrentFrame
+
+ScrollPreviousRoom:
+	rts 
+
+;bank5_938F_table
+shutterTable:
+    ; shutter=right, up=up, shutter=left, down=down
+    .db $20, $80, $20, $40
 
 PlayerIA:
 	ldx #$00
@@ -1100,9 +1154,16 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		bne .resetYSpeed
 	.speedMI:
 		lda $10
-		jsr ObjectCollisionCheckHelper ; ici ça pos problème
-		beq .setterPos
-		; todo si collision A voir parce que pas collision
+		ldy objectId ; pour le jump on achoute 08 (8+x0c)
+		bne .checkCollisionSMI
+		ldy objectSpriteNum
+		cpy #$09
+		bne .checkCollisionSMI
+		clc
+		adc #$08 
+		.checkCollisionSMI:
+			jsr ObjectCollisionCheckHelper ; ici ça pos problème
+		beq .setterPos ;
 		ldx objectId
 		lda $03 ; tmp tmp objectPosY
 		and #$f0 ; On garde le MSB
@@ -1162,7 +1223,7 @@ ObjectCheckIfOutScreenVertically:
 	lda objectPosY, x
 	sbc objectYSpeed, x
 	sta $01
-	; .isScreenBottom:
+	.isScreenBottom:
 		cmp #$E8         ; Si screen bottom (posY >= 0xE8)
 		bcc .isScreenTop ; non
 		cmp $f8          ; alors si screen bottom (posY <= 0xF8)
