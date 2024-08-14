@@ -41,8 +41,8 @@ ppuTransferRawSize .rs 1
 tsaPPUtransferSize  .rs 1
 lastRestartPointType .rs 1 ; 0=level beginning; #$xx (todo nombre de niveau) = point A 
 
-currentBeginScreen .rs 1 ; la premier bande de l'écran (4 sprite de largeur)
-currentEndScreen .rs 1 ; la dernier bande de l'écran (4 sprite de largeur) 
+currentBeginScreen .rs 1 ; Id écran du début de scrolling
+currentEndScreen .rs 1 ; Id écran de fin de scrolling
 currentOrderNum .rs 1 ; l'ordre d'affichage de la room
 currentRoomPointer .rs 4
 currentStripeEndType .rs 1 ;0=right 1=up 2=left 3=down  
@@ -52,7 +52,7 @@ currentTuilesState .rs 3 ; state des tuiles du dessus et en dessous
 ladderPosX .rs 1
 
 scrollPosX      .rs 1
-scrollPosScreen .rs 1
+scrollPosScreen .rs 1 ; id de l'écran en cours
 scrollPosY      .rs 1
 screenMovedFlag .rs 1
 ;Bit 0: (&01) = Nouvel ennemi peut être chargé (le screen a bougé)
@@ -80,8 +80,10 @@ playerStandingTimer .rs 1
 playerBlinkState .rs 1 ; Timer: 0 = no blinking, #$6f = max
 bossBlinkState .rs 1
 
+var33 .rs 1 ; pour l'instant utilisé uniquement dans DrawBlocksScroll
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 var7B .rs 1
+
 
 
   .rsset $0100
@@ -106,8 +108,8 @@ unknownPalettes .rs 16
 objectSpriteNum     .rs 32 ;400
 objectFlags         .rs 32 ;420
 objectActionStateCounter .rs 32 ;440  compter changement d'état d'une action; ObjectUnknown440
-objectPosScreen      .rs 32 ; 460 bande dans laquelle le l'objet est
-objectCurrentScreen .rs 32 ; 480 Numéro de l'écran ou se trouve l'object
+objectPosScreen      .rs 32 ; 460 ID écran ou se trouve l'object
+objectCurrentScreen .rs 32 ; 480
 objectPosX          .rs 32 ; 4a0 Pos x de l'objet en px
 objectPosXfraction  .rs 32 ; 4c0
 objectXSpeed        .rs 32 ; 4e0 
@@ -646,7 +648,6 @@ MainLoop:
 
 	jsr UpdateGraphics
 
-
 	; scrolling vertical
 	lda currentStripeEndType
 	bne CheckStripeEnding
@@ -680,9 +681,9 @@ CheckStripeEnding:
 		bne .next ; non
 	    ldy currentOrderNum ; id écran courrant layout
 		jsr RoomLayoutLoadRoomNum; retourne A = id ROOM_LAYOUT_TABLE
-		ldy currentStripeEndType
+		ldy currentStripeEndType ; ;0=right 1=up 2=left 3=down  
 		and shutterTable, y
-		bne ScrollPreviousRoom
+		bne ScrollNextRoom
 	.scroll:
 		ldx scrollPosX
 	.next:
@@ -695,7 +696,33 @@ CheckStripeEnding:
 		sta currentStripeEndType
 		jmp MainLoopEndCurrentFrame
 
-ScrollPreviousRoom:
+; Scrolling écran suivant
+ScrollNextRoom:
+	; todo supprimer object de la room courrante
+	;jsr  ForgetRoomObjects
+	ldx currentEndScreen ; ID écran 
+	inx ; up de la currentEndScreen
+	txa
+	pha
+	jsr DrawOneScreen
+	
+	ldx stageId
+	; todo test porte
+
+	inc objectPosScreen
+	; todo gestion ennemi
+	
+	lda currentStripeEndType
+	cmp #$04
+	php
+	bne .doScrolling
+		inc scrollPosScreen
+	.doScrolling:
+		jsr DoScrolling
+	plp
+	
+	pla
+
 	rts 
 
 ;bank5_938F_table
@@ -1226,26 +1253,28 @@ ObjectCheckIfOutScreenVertically:
 	.isScreenBottom:
 		cmp #$E8         ; Si screen bottom (posY >= 0xE8)
 		bcc .isScreenTop ; non
-		cmp $f8          ; alors si screen bottom (posY <= 0xF8)
+		cmp #$f8          ; alors si screen bottom (posY <= 0xF8)
 		bcs .posYSUPF8   ; oui c'est pas bon pour le perso
 		lda #$03
-		bne .false
+		bne .setCurrentStripeEndType
 	.isScreenTop:
 		cmp #$04   ; Si screen top (posY <= 0x04)
-		bcc .false ; oui 
+		bcc .upCurrentStripeEndType ; oui 
 		bcs .end   ; non
 	.posYSUPF8:
 		cmp #$FC 
 		bcs .end 
 		; Y >= #$F8 but < #$FC
 		cpx #$00
-		bne .setCurrentStripeEndType
+		bne .false
 		lda objectYSpeed
-		bmi .setCurrentStripeEndType
+		bmi .false
 		lda objectPosYFraction
 		sta $00
 		lda objectPosY
 		sta $01
+	.upCurrentStripeEndType:
+		lda #$01 ; up pour CurrentStripeEndType
 	.setCurrentStripeEndType:
 		cpx #$00
 		bne .false
@@ -1271,7 +1300,6 @@ ScrollingLeft:
 	pha
 	lda $05 ; save  ObjectPosX
 	pha
-
 
 	ldx objectPosScreen
 	dex
@@ -1337,6 +1365,111 @@ ScrollingRight:
 		
 		rts
 
+DoScrolling:
+	lda #$00 ; init bank sprite ennemi ?
+	sta $00  ; $59
+
+	lda currentStripeEndType ;0=right 1=up 2=left 3=down
+	and #01 ; Si up/down
+	beq HorizontalScrollPoint
+	jmp VerticalScrollPoint
+
+
+; Scrolling horizontal de la ppu
+HorizontalScrollPoint:
+	lda objectSpriteNum
+	cmp #$09 ; Jump/fall ?
+	
+	rts
+
+; Scrolling vertical de la ppu
+VerticalScrollPoint:
+	lda currentStripeEndType ; 1=up 3=down
+	lsr a ; on garde le dernier bit, donc 0=up 1=down (ça épure gauche/droite)
+	tax ; devient une key
+
+	; Init scrolling
+	lda verticalScrollOffesetTable, x
+	sta var33
+	lda verticalScrollBeginTable, x
+	sta scrollPosY ; $EF
+
+	.loop:
+		; Update graphics
+		txa
+		pha ; Save de la key 
+		jsr UpdateGraphics
+		jsr DrawBLocksScroll
+		; todo loadEnemyGraphics
+		jsr NextFrame
+		pla ; Restore key X
+		tax 
+
+		; scrolling vertical
+		CLC
+		lda scrollPosY
+		adc verticalScrollIncrementTable, x
+		sta scrollPosY
+		CLC
+		lda var33
+		adc verticalScrool33Table, x
+		sta var33
+		bmi .loopEnd
+		cmp #$3c
+		beq .loopEnd
+		bne .loop
+	.loopEnd:
+		lda #$00
+		sta	scrollPosY
+		sta objectPosYFraction
+		jsr UpdateGraphics
+
+	rts
+
+
+verticalScrollOffesetTable:
+	.db $3B, $00            
+verticalScrollBeginTable:
+	.db $ef, $00 ; -17, 00 => complément à 2 pour neg
+verticalScrollIncrementTable:  
+	.db  $fc, $04 ; -4,  4 => complément à 2 pour neg
+verticalScrool33Table:
+	.db $FF, $01 ; Increment pour var33
+
+DrawOneScreen
+	sta $05  ; ID actuelScreen
+	ldx #$ff ; INIT
+	stx $04  
+	lda #$00 ; id player
+	sta objectId 
+
+	.loopDraw:
+		lda #$00
+		sta $0d
+		sta tsaPPUtransferSize
+
+		lda #$08 ; Il y'a 8 colonnes à draw
+		sta $0c
+		jsr PrepareDrawBlock
+
+		lda PPU2000value ; check si ppu est éteinte
+		and #$80
+		beq .transfer ; oui alors transfer
+		;.nextFrame:  ; non next Frame
+			jsr NextFrame
+			jmp .loopNext
+
+		.transfer:
+			jsr TsaPPUtransfer	
+
+		.loopNext:
+			lda $04
+			cmp #$ff
+			bne .loopDraw
+	
+	rts
+
+
 ObjectStandStillRight:
 	lda objectFlags ; met le perso face droite
 	and #$40
@@ -1346,7 +1479,6 @@ ObjectStandStillRight:
 	sta joyPadOld ; reset de la touche pressé la frame d'avant
 
 	jmp PlayerIACheckMoving ; go PlayerIA
-
 
 ObjectUpdateMovementRight:
 	ldx objectId ; objet ID
@@ -1567,13 +1699,13 @@ ScrollProcess:
 	lda #$00
 	sta objectId
 
-	.process:
+	.loopDraw:
 		lda #$00
 		sta $0d
 		sta tsaPPUtransferSize
 		
 		lda #$08
-		sta $0c ; on se place sur la dernière colonne (1 colonne = 4 bandes)
+		sta $0c ; Il y'a 8 colonnes à draw
 		jsr PrepareDrawBlock
 
 		; Si PPU ON le transfère se fera lors de la NMI
@@ -1581,18 +1713,21 @@ ScrollProcess:
 		and #$80
 		beq .doTransfer
 
-		jsr NextFrame
-		jmp .dontTransfer
-	.doTransfer:
-		jsr TsaPPUtransfer
+		;.nextFrame:
+			jsr NextFrame
+			jmp .loopNext
 
-	.dontTransfer:
-		lda $04
-		cmp #$ff
-		bne .process
+		.doTransfer:
+			jsr TsaPPUtransfer
+
+		.loopNext:
+			lda $04
+			cmp #$ff
+			bne .loopDraw
 
 	rts
 
+; Function9FB3
 PrepareDrawBlock:
 	lda $05
 	bmi .end ; $05 sera 01 puis 00 puis $ff (donc NT 24; 20; XX)
@@ -1606,16 +1741,20 @@ PrepareDrawBlock:
 	beq .drawBlock
 	lda varBF ; Todo ?
 	bne .dontDrawBlock
+
 	.drawBlock:
 		jsr DrawBlockFromActiveLevelMap
+
 	.dontDrawBlock:
 		lda $04 ; Si bande = 0 on passe à l'écran prev
 		bne .prevColumn
 		dec $05  ; NT--
+		
 	.prevColumn:
 		dec $04 ; Dec bande--
 		dec $0C ; Dec courante colonne
 		bne PrepareDrawBlock
+
 	.end:
 		rts
 
@@ -2382,12 +2521,12 @@ PPUTransferRaw:
 
 TsaPPUtransfer:
 	lda tsaPPUtransferSize
-	bne .do
-	; todo manipulation
-	;and #$c0
-	;bne TsaBitManipulation
+	bne .pre
 	jmp .end
-
+	.pre:	
+		and #$c0 ; manipulation ?
+		beq .do ; non transfert classic 
+		jmp TsaBitManipulation ; oui
 	.do:
 		lda PPU2000value ; PPU inc en 32 (pas en 1)
 		ora #$04
@@ -2397,7 +2536,6 @@ TsaPPUtransfer:
 		sta $0e
 		lda #HIGH(tsaPPUTransferNTaddress)
 		sta $0f
-
 		lda #LOW(tsaPPUTransferNTaddress)
 	.init:
 		sta $0c
@@ -2470,6 +2608,74 @@ TsaPPUtransfer:
 		rts
 
 TsaBitManipulation:
+	lda tsaPPUtransferSize
+	cmp #$40 ; si != 40 
+	bne PPURamBitSet
+	
+	ldx #$00
+	sta tsaPPUtransferSize
+	.loop:
+		lda tsaPPUTransferNTaddress
+		sta PPUADDR
+		lda tsaPPUTransferNTaddress+1
+		sta PPUADDR
+
+		.loopTransfer:
+			lda tsaPPUTransferNTdata, x
+			sta PPUDATA
+			inx
+			txa
+			and #$07
+			bne .loopTransfer
+		
+		clc
+		lda tsaPPUTransferNTaddress+1
+		adc #$20
+		sta tsaPPUTransferNTaddress+1
+
+		;ldy tsaPPUtransferSize
+		;lda tsaPPUTransferRestData, y
+		;sta tsaPPUTransferRestData
+
+		ldy #$00
+		jsr PPURamBitSetSingle
+
+		inc tsaPPUtransferSize
+		inc tsaPPUTransferAttrAddress+1
+
+		cpx #$10
+		bne .loop
+
+	lda #$00
+	sta tsaPPUtransferSize
+
+	rts
+
+PPURamBitSet:
+
+
+	rts
+
+PPURamBitSetSingle:
+	lda tsaPPUTransferAttrAddress, y
+	sta PPUADDR
+	lda tsaPPUTransferAttrAddress+1, y
+	sta PPUADDR
+
+	lda PPUDATA
+	;lda PPUDATA
+	;and tsaPPUTransferAttrData, y
+	;ora tsaPPUTransferRestData, y
+
+	;pha
+	;lda tsaPPUTransferAttrAddress, y
+	;sta PPUADDR
+	;lda tsaPPUTransferAttrAddress+1, y
+	;sta PPUADDR
+	;pla
+	lda tsaPPUTransferAttrData, y
+	sta PPUDATA
+	
 	rts
 
 ;---------------- ROOM-----------------
@@ -2675,6 +2881,203 @@ Adjust32x32BlockAddress:
     inx
 
     rts
+
+
+DrawBLocksScroll:
+	lda stageId
+	jsr BankSwitchStage
+	
+	; Calcul de l'adresse de la nameTable
+	lda var33 ; 0x003b (addr low)
+	lsr a ; on récupère le MSB 3 addr low
+	lsr a
+	lsr a
+	lsr a
+	sta tsaPPUTransferNTaddress
+
+	lda var33 ; 0x003b (addr high) 
+	asl a ; alignement des bit 0 et 1 pour le masque
+	asl a
+	asl a
+	pha
+	and #$18 ; récupération des bits 
+	sta tsaPPUTransferNTaddress+1
+	
+	pla
+	asl a
+	and #$c0
+	ora tsaPPUTransferNTaddress+1 ;ajout du res du masque avec addr high
+	sta tsaPPUTransferNTaddress+1
+
+	; Calcul de l'adresse des attributs
+	;    Pour ça on combine les trois bits du MSB et les deux bits du LSB
+	lda var33 ; 0x003b (0011 1011)
+	and #$f8  ; save de 1111 1000 (0011 1000)
+	ora #$c0  ; ajout des bits 7 et 6 (1111 1000)
+	sta tsaPPUTransferAttrAddress+1
+
+	lda var33
+	and #$03
+	asl a
+	ora tsaPPUTransferAttrAddress+1
+	sta tsaPPUTransferAttrAddress+1
+
+	; Ajustement de l'adresse en fonction de ScroolPosScreen
+	ldx #$20
+	lda scrollPosScreen ; si l'id du screen est pair NT 20 sinon 24
+	and #$01
+	beq .adjustments
+		ldx #$24
+	.adjustments: ; on l'ajoute au reste pour avor l'adresse complète
+		; pour NT
+		txa
+		ora tsaPPUTransferNTaddress
+		sta tsaPPUTransferNTaddress  
+		; Pour Attr
+		txa
+		ora #$03
+		sta tsaPPUTransferAttrAddress
+	
+	; Draw lignes horizontales
+	lda #$00
+	sta $0c ; Msb pointer 8o
+	lda var33 ; iterateur lignes horizontales
+	and #$3b ; avant dernières bande de 8 pixels horizontale
+	lsr a ; division par 8
+	ror $0c
+	lsr a
+	ror $0c
+	lsr a
+	ror $0c
+	lsr $0c
+	ora $0c
+	sta $0c
+
+	ldx objectPosScreen
+	lda ROOM_ORDER, x
+	asl a ; *2 poure le word
+	tax ; key pour ROOM_POINTER_TABLE
+	lda ROOM_POINTER_TABLE, x
+	sta $04
+	lda ROOM_POINTER_TABLE+1, x
+	sta $05
+
+	ldx #$00
+	stx $0d
+
+	.loop:
+		lda #$00
+		sta currentRoomPointer+1
+		; saves
+		lda $0d
+		PHA
+		lda $0e
+		PHA
+		lda $05
+		pha
+		lda $0c
+		PHA
+		and #$38
+		asl a
+		asl a
+		sta $0d
+		lda $0c
+		and #$07
+		lsr A
+		ror A
+		ror A
+		ror A
+		sta $0e
+
+		lda objectPosScreen
+		sta $0c
+		ldy #$00
+		jsr CheckCollisionAgainstActives
+		tay
+		pla
+		sta $0c
+		pla
+		sta $05
+		pla
+		sta $0e
+		pla
+		sta $0d
+
+		ldy $0c
+		lda [$04], y ; 4x4 blocs
+		sta $0f
+		asl A
+		rol currentRoomPointer+1
+		asl A
+		rol currentRoomPointer+1
+		tay
+		lda #HIGH(ROOM_BLOCK_DATA)
+		ora currentRoomPointer+1
+		sta currentRoomPointer+1
+		lda #LOW(ROOM_BLOCK_DATA)
+		sta currentRoomPointer
+		lda var33
+		and #$04 ; Première ligne
+		beq .initLoop
+		iny
+		.initLoop:
+			lda #$02
+			sta $0e
+		.loopBlock:
+			lda [currentRoomPointer], y
+			;asl a
+			;asl a
+			clc
+			sta tsaPPUTransferNTdata, x
+			adc #$01
+			sta tsaPPUTransferNTdata+8, x
+			adc #$01
+			sta tsaPPUTransferNTdata+1, x
+			adc #$01
+			sta tsaPPUTransferNTdata+9, x
+			INX
+			INX
+			INY
+			INY
+			dec $0e
+			bne .loopBlock
+
+		lda var33
+		ldy #$0f
+		and #$04
+		beq .next2
+		ldy #$f0
+		.next2:
+
+		sty tsaPPUTransferAttrData
+		ldy $0f
+		lda ROOM_BLOCK_PALETTE, y
+		sta tsaPPUTransferAttrData
+		;and tsaPPUTransferAttrData
+		;ldy $0d
+		;sta tsaPPUTransferRestData, y
+		lda $0c
+		ora #$08
+		sta $0c
+		inc $0d
+		lda $0d
+		cmp #$02
+		beq .loopEnd
+		jmp .loop
+
+	.loopEnd:
+		lda #$40 ; set 0x40 pour Transfer manipulation bit
+		sta tsaPPUtransferSize
+
+		;lda #$ff
+		;eor tsaPPUTransferAttrData
+		;sta tsaPPUTransferAttrData
+
+		lda saveBank
+		jsr BankSwitch
+	rts
+
+
 
 RoomLayoutLoadRoomNum:
 	lda stageId
@@ -3583,7 +3986,8 @@ NMI:
 	
 	lda scrollPosX
 	sta PPUSCROLL
-	lda #$00
+	lda scrollPosY
+
 	sta PPUSCROLL
 	
 	lda PPU2000value
