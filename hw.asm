@@ -19,10 +19,10 @@ pointer .rs 19
 PPU2000value .rs 1
 PPU2001Value .rs 1
 
-tmpPosScreen .rs 1     ; $20   
-tmpPosXFraction .rs 1  ; $21
-tmpPosX .rs 1          ; $22
-tmpPosY .rs 1          ; $2D 
+tmpPosScreen .rs 1     
+tmpPosXFraction .rs 1 
+tmpPosX .rs 1         
+tmpPosY .rs 1     
 
 stageId .rs 1
 currentBank .rs 1
@@ -575,7 +575,6 @@ StageBeginFromDeath:
 	sta currentOrderNum
 	tay
 	jsr RoomLayoutLoadRoomNum
-	
 	and #$1F
 	clc
 	adc currentBeginScreen
@@ -711,19 +710,48 @@ ScrollNextRoom:
 
 	inc objectPosScreen
 	; todo gestion ennemi
-	
+
 	lda currentStripeEndType
-	cmp #$04
+	cmp #$04 ; max 5 rooms de suite
 	php
 	bne .doScrolling
 		inc scrollPosScreen
 	.doScrolling:
 		jsr DoScrolling
 	plp
-	
+	beq .nextFrame
+	inc scrollPosScreen
+	.nextFrame:
+		jsr NextFrame
+	lda currentEndScreen
+	clc
+	adc #$02 ; on draw la room suivante pour préparer le scroll
+	jsr DrawOneScreen 
+	inc currentOrderNum
+	ldy currentOrderNum
+	jsr RoomLayoutLoadRoomNum
+	pha
+	and #$e0
+	bne .move 
+		; todo gestion room boss
+	.move:
+	pla 
+	and #$1f
+	sta currentBeginScreen
 	pla
+	TAX
+	CLC
+	adc currentBeginScreen
+	sta currentEndScreen
+	stx currentBeginScreen
+	lda #$00
+	sta joyPad
+	sta joyPadOld
+	lda #$41
+	sta screenMovedFlag
+	;lda teleportEnteredFlage
 
-	rts 
+	jmp MainLoopEndCurrentFrame
 
 ;bank5_938F_table
 shutterTable:
@@ -2039,7 +2067,7 @@ ForgetRoomObjects:
 ; Initial screen start (à modifier si on ajoute un niveau)
 ; par ordre de stage
 firstScreenScreenTable:
-    .db $00, $00 ; début
+    .db $00, $00, $00 ; début (premier octet mort car les stages commencent à 1 à revoir)
     .db $00, $18 ; point A
 
 firstScreenEnemyPointer: 
@@ -3080,8 +3108,12 @@ DrawBLocksScroll:
 
 
 RoomLayoutLoadRoomNum:
+	tya ; Save Y key ROOM_LAYOUT_TABLE
+	pha
 	lda stageId
 	jsr BankSwitchStage
+	pla ; Restore y 
+	tay
 	lda ROOM_LAYOUT_TABLE, y
 	pha
 	lda saveBank
