@@ -675,6 +675,7 @@ CheckStripeEnding:
 		bne .isEndBeginScreen
 	.isBeginScreen:
 		; todo	
+		jmp MainLoopEndCurrentFrame
 	.isEndBeginScreen:
 		cpx currentEndScreen ; si écran de fin
 		bne .next ; non
@@ -1433,6 +1434,15 @@ VerticalScrollPoint:
 		pla ; Restore key X
 		tax 
 
+		;move player
+		clc
+		lda objectPosYFraction
+		adc verticalScroolPosYFraction, x
+		sta objectPosYFraction
+		lda objectPosY
+		adc verticalScroolPosY, x
+		sta objectPosY
+
 		; scrolling vertical
 		CLC
 		lda scrollPosY
@@ -1440,7 +1450,7 @@ VerticalScrollPoint:
 		sta scrollPosY
 		CLC
 		lda var33
-		adc verticalScrool33Table, x
+		adc verticalScroll33Table, x
 		sta var33
 		bmi .loopEnd
 		cmp #$3c
@@ -1461,8 +1471,13 @@ verticalScrollBeginTable:
 	.db $ef, $00 ; -17, 00 => complément à 2 pour neg
 verticalScrollIncrementTable:  
 	.db  $fc, $04 ; -4,  4 => complément à 2 pour neg
-verticalScrool33Table:
+verticalScroll33Table:
 	.db $FF, $01 ; Increment pour var33
+verticalScroolPosYFraction: 
+	.db $BF, $41 ; Increment of objectPosYFraction+0
+verticalScroolPosY: 
+	.db $03, $FC ; Increment of ObjectPosY+0
+
 
 DrawOneScreen
 	sta $05  ; ID actuelScreen
@@ -3104,8 +3119,6 @@ DrawBLocksScroll:
 		lda saveBank
 		jsr BankSwitch
 	rts
-
-
 
 RoomLayoutLoadRoomNum:
 	tya ; Save Y key ROOM_LAYOUT_TABLE
