@@ -659,7 +659,7 @@ MainLoop:
 ; A = currentStripeEndType (0=right 1=up 2=left 3=down)  
 CheckStripeEnding:
 	cmp #$01
-	bne .scroll
+	bne .process
 	; todo teleport
 	;lda TeleportEnteredFlag
 
@@ -668,15 +668,22 @@ CheckStripeEnding:
 	beq .next 
 	.onLadder:
 		lda currentStripeEndType
+	.process:	
 		ldx scrollPosX
 		bne .next
 		ldx scrollPosScreen ; id écran
 		cpx currentBeginScreen  ; si écran du début
-		bne .isEndBeginScreen
-	.isBeginScreen:
-		; todo	
-		jmp MainLoopEndCurrentFrame
-	.isEndBeginScreen:
+		bne .goUp
+	;.goDown:
+		TXA
+		ldy currentOrderNum ; le masque de la room précédente
+		dey
+		jsr RoomLayoutLoadRoomNum
+		ldy currentStripeEndType ;0=right 1=up 2=left 3=down 
+		ldx #$03
+		and shutter2Table, y
+		bne ScrollPreviousRoom
+	.goUp:
 		cpx currentEndScreen ; si écran de fin
 		bne .next ; non
 	    ldy currentOrderNum ; id écran courrant layout
@@ -695,6 +702,47 @@ CheckStripeEnding:
 		lda #$00
 		sta currentStripeEndType
 		jmp MainLoopEndCurrentFrame
+
+; Scrolling écran précédent 
+ScrollPreviousRoom:
+	ldx  currentBeginScreen 
+	dex 
+	stx currentEndScreen
+	dec currentOrderNum
+	ldy currentOrderNum
+	jsr RoomLayoutLoadRoomNum
+	and #$1f
+	sta currentBeginScreen
+	lda currentEndScreen
+	SEC
+	sbc currentBeginScreen
+	sta currentBeginScreen
+	; jsr ForgetRoomObjects
+	lda currentEndScreen
+	jsr DrawOneScreen
+	dec objectPosScreen
+	; todo enemy graphics
+	lda currentStripeEndType
+	cmp #$04
+	php 
+	bne .doScroll
+		dec scrollPosScreen
+	.doScroll:
+		jsr DoScrolling
+	PLP
+	beq .nextFrame
+		dec scrollPosScreen
+	.nextFrame:
+		jsr NextFrame
+	lda currentEndScreen
+	SEC
+	sbc #$01
+	jsr DrawOneScreen
+	lda #$01
+	sta screenMovedFlag
+	lda #$00
+	sta currentStripeEndType
+	jmp MainLoopEndCurrentFrame
 
 ; Scrolling écran suivant
 ScrollNextRoom:
@@ -758,6 +806,10 @@ ScrollNextRoom:
 shutterTable:
     ; shutter=right, up=up, shutter=left, down=down
     .db $20, $80, $20, $40
+
+;bank5_938B_table
+shutter2Table: ;right, up, left, down. down=up, up=down
+    .db $00, $40, $00, $80
 
 PlayerIA:
 	ldx #$00
@@ -1284,7 +1336,7 @@ ObjectCheckIfOutScreenVertically:
 		bcc .isScreenTop ; non
 		cmp #$f8          ; alors si screen bottom (posY <= 0xF8)
 		bcs .posYSUPF8   ; oui c'est pas bon pour le perso
-		lda #$03
+		lda #$03  ; set 3 pour down
 		bne .setCurrentStripeEndType
 	.isScreenTop:
 		cmp #$04   ; Si screen top (posY <= 0x04)
