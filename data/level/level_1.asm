@@ -80,6 +80,17 @@ roomBlockDataStage13:
 	.db $0d, $0d, $04, $05, $00, $00, $0f, $0a
 	.db $05, $05, $05, $05, $05, $05, $05, $05
 
+roomBlockDataStage14:	
+	.db $00, $00, $00, $00, $00, $00, $00, $00
+	.db $00, $00, $00, $07, $09, $09, $10, $05
+	.db $05, $00, $00, $00, $00, $00, $04, $05
+	.db $05, $00, $00, $04, $00, $00, $04, $05
+	.db $05, $00, $00, $04, $00, $00, $04, $05
+	.db $05, $00, $00, $04, $00, $00, $00, $00
+	.db $0a, $0d, $04, $05, $00, $00, $0f, $0a
+	.db $05, $05, $05, $05, $05, $05, $05, $05
+
+
 
   ; ROOM_BLOCK_PALETTE
   .org $b300
@@ -87,7 +98,7 @@ roomBlockDataStage13:
 
   ; ROOM_ORDER (id de la Room)
   .org $bc00
-	.db $00, $00, $01, $02, $03, $03
+	.db $00, $00, $01, $02, $03, $04
 
   ; ROOM_POINTER_TABLE
   .org $bC30
@@ -95,6 +106,7 @@ roomBlockDataStage13:
 	.dw roomBlockDataStage11
 	.dw roomBlockDataStage12
 	.dw roomBlockDataStage13
+	.dw roomBlockDataStage14
 
   ; ROOM_LAYOUT_TABLE (msb : ?? lsb : nombre de room pour le scrolling commence à 0 ) 
   .org $bc70;             

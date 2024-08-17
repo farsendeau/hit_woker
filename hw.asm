@@ -675,12 +675,10 @@ CheckStripeEnding:
 		cpx currentBeginScreen  ; si écran du début
 		bne .goUp
 	;.goDown:
-		TXA
 		ldy currentOrderNum ; le masque de la room précédente
 		dey
 		jsr RoomLayoutLoadRoomNum
 		ldy currentStripeEndType ;0=right 1=up 2=left 3=down 
-		ldx #$03
 		and shutter2Table, y
 		bne ScrollPreviousRoom
 	.goUp:
@@ -696,16 +694,21 @@ CheckStripeEnding:
 	.next:
 		; pas sur une échelle
 		lda currentStripeEndType
+		cmp #$03
+		bne CheckStripeEndingEnd
+		;lda #$00
+		;sta currentStripeEndType
+		;jmp RESET
 	.killPlayer:
 	
-	.end:
+	CheckStripeEndingEnd:
+
 		lda #$00
 		sta currentStripeEndType
 		jmp MainLoopEndCurrentFrame
 
 ; Scrolling écran précédent 
 ScrollPreviousRoom:
-	ldx  currentBeginScreen 
 	dex 
 	stx currentEndScreen
 	dec currentOrderNum
@@ -800,16 +803,18 @@ ScrollNextRoom:
 	sta screenMovedFlag
 	;lda teleportEnteredFlage
 
-	jmp MainLoopEndCurrentFrame
+	jmp CheckStripeEndingEnd
 
-;bank5_938F_table
-shutterTable:
-    ; shutter=right, up=up, shutter=left, down=down
-    .db $20, $80, $20, $40
+
 
 ;bank5_938B_table
 shutter2Table: ;right, up, left, down. down=up, up=down
     .db $00, $40, $00, $80
+;bank5_938F_table
+shutterTable:
+    ; shutter=right, up=up, shutter=left, down=down
+    .db $20, $80, $20, $40, $00
+
 
 PlayerIA:
 	ldx #$00
@@ -1331,7 +1336,7 @@ ObjectCheckIfOutScreenVertically:
 	lda objectPosY, x
 	sbc objectYSpeed, x
 	sta $01
-	.isScreenBottom:
+	;.isScreenBottom:
 		cmp #$E8         ; Si screen bottom (posY >= 0xE8)
 		bcc .isScreenTop ; non
 		cmp #$f8          ; alors si screen bottom (posY <= 0xF8)
@@ -3175,16 +3180,36 @@ DrawBLocksScroll:
 RoomLayoutLoadRoomNum:
 	tya ; Save Y key ROOM_LAYOUT_TABLE
 	pha
+
 	lda stageId
 	jsr BankSwitchStage
+
 	pla ; Restore y 
 	tay
+
+	cpy #$00
+	bmi .end
+
 	lda ROOM_LAYOUT_TABLE, y
 	pha
+
+	TXA
+	pha
+
 	lda saveBank
 	jsr BankSwitch
+
+	pla
+	tax
+
 	pla
 	rts
+
+	.end:
+		lda saveBank
+		jsr BankSwitch
+		lda #$00
+		rts
 
 UpdateCurrentTileState:
 	; Reset de la currenTileState
