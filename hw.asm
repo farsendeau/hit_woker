@@ -143,7 +143,7 @@ OAMDMA  = $4014
 
 ; Stage Data
 ROOM_BLOCK_DATA      = $b000
-ROOM_BLOCK_PALETTE   = $b300
+ROOM_BLOCK_PALETTE   = $bbe0
 ROOM_ORDER           = $bC00
 ROOM_POINTER_TABLE   = $bC30
 ROOM_LAYOUT_TABLE    = $bc70 ; size = #$48
@@ -805,8 +805,6 @@ ScrollNextRoom:
 
 	jmp CheckStripeEndingEnd
 
-
-
 ;bank5_938B_table
 shutter2Table: ;right, up, left, down. down=up, up=down
     .db $00, $40, $00, $80
@@ -814,7 +812,6 @@ shutter2Table: ;right, up, left, down. down=up, up=down
 shutterTable:
     ; shutter=right, up=up, shutter=left, down=down
     .db $20, $80, $20, $40, $00
-
 
 PlayerIA:
 	ldx #$00
