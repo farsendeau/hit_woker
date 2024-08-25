@@ -354,7 +354,7 @@ Reset2:
 	sta PPU2001Value 
 	
 	; On met les chr en RAM
-	lda #0
+	lda #$00
 	sta stageId
 	sta pointer+2
 	lda #$0
@@ -696,13 +696,13 @@ CheckStripeEnding:
 		lda currentStripeEndType
 		cmp #$03
 		bne CheckStripeEndingEnd
-		;lda #$00
-		;sta currentStripeEndType
-		;jmp RESET
-	.killPlayer:
-	
+		lda #$00
+		sta currentStripeEndType
+		lda #$f8
+		sta objectPosY
+		jmp KillPlayer		
+		
 	CheckStripeEndingEnd:
-
 		lda #$00
 		sta currentStripeEndType
 		jmp MainLoopEndCurrentFrame
@@ -3547,8 +3547,28 @@ SpikeKill2:
 	jmp KillPlayer		
 
 KillPlayer:
-	; TODO
-	rts
+	; TODO sound
+
+	lda #$ff
+	sta $00
+
+	; todo anim de mort
+	jsr DisableNMIPPU ; stop PPU
+	; reset variable
+	lda #$00
+	sta objectPosScreen
+	sta playerWalkTimer
+	sta playerBlinkState
+
+	lda #$00
+	sta pointer+2
+	lda #$01
+	sta pointer+3
+	jsr WriteChr
+	; todo restart point LastRestartPointType
+	jmp StageBegin
+
+
 
 ;-------Graphics-----------
 UpdateGraphics:
