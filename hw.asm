@@ -3548,11 +3548,30 @@ SpikeKill2:
 
 KillPlayer:
 	; TODO sound
+	
+	; Death anim
+	.initLoop:
+		lda #$05
+		sta miscCounter
+		.loopMisCounter:
+			jsr NextFrame
+			dec miscCounter
+			bne .loopMisCounter
 
-	lda #$ff
-	sta $00
 
-	; todo anim de mort
+	lda objectSpriteNum
+	cmp #$18
+	beq .next
+		lda #$18
+		sta objectSpriteNum
+		lda saveBank
+		jsr BankSwitch
+		jsr UpdateGraphics
+		lda #$80
+		sta miscCounter
+		bne .loopMisCounter
+	.next:
+
 	jsr DisableNMIPPU ; stop PPU
 	; reset variable
 	lda #$00

@@ -62,6 +62,7 @@ metaSpritesActionTable:
 	.dw metaSpritesActionLadder
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionLadderTop
+	.dw metaSpritesActionDeath
 
 metaSpritesActionStanding:
 	.db $00, $00
@@ -89,6 +90,9 @@ metaSpritesActionJump:
 metaSpritesActionHitGround:
 	.db $00, $07, $07 
 
+metaSpritesActionDeath:
+	.db $00, $08
+
 ;
 ; Pour dataSpriteXX
 ;     00 : Nb sprite
@@ -106,6 +110,7 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteLadderClimb2
 	.dw dataMetaSpriteLadderTop
 	.dw dataMetaSpriteHitGround
+	.dw dataMetaSpriteDeath1
 
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
@@ -208,6 +213,15 @@ dataMetaSpriteHitGround:
 	.db $37, $00
 	.db $38, $00
 
+dataMetaSpriteDeath1:
+	.db $05; 5 sprites
+	.db $06 ; offsetDeath
+	.db $1c, $00
+	.db $1d, $00
+	.db $1e, $00
+	.db $1f, $00
+	.db $0d, $00
+
 offsetTable:
 	.dw offsetStanding
 	.dw offsetMovingSlowly ; et dataMetaSpriteMovingRun1
@@ -215,6 +229,7 @@ offsetTable:
 	.dw offsetLadder
 	.dw offsetLadder2
 	.dw offsetHitGround
+	.dw offsetDeath
 
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
@@ -231,6 +246,9 @@ offsetLadder2:
     .db $0d, $0c, $0f, $0e, $11, $10, $12
 offsetHitGround: 
 	.db $17, $18, $19, $09, $00, $01, $02, $03, $04, $1a, $05, $1b
+offsetDeath:
+	.db $1c, $1d, $1e, $1f, $20
+
 ;
 ; Décalage de pixel
 ; 00 = f4
@@ -238,13 +256,13 @@ offsetHitGround:
 ; 10 = 04
 ; 18 = 0c
 ;
-;        00   01   02   03   04   05   06   07   08   09   0a   0b   0c   0d   0e   0f   10   11   12   13   14   15   16  17    18    19  1a
+;        00   01   02   03   04   05   06   07   08   09   0a   0b   0c   0d   0e   0f   10   11   12   13   14   15   16  17    18    19  1a  1b   1c    1d   1e   1f  20
 offsetRightX:
    ;    $08, $00, $10, $08, $00, $08, $00, $08, $00, $10, $10, $10, $08, $00, $08, $00, $08, $00, $08, $00, $10, $08, $00, $00, 
-	.db $fc, $f4, $04, $fc, $f4, $fc, $f4, $fc, $f4, $04, $04, $04, $00, $f8, $00, $f8, $00, $f8, $00, $f8, $04, $fc, $f4, $04, $fc, $f4, $04, $f4
+	.db $fc, $f4, $04, $fc, $f4, $fc, $f4, $fc, $f4, $04, $04, $04, $00, $f8, $00, $f8, $00, $f8, $00, $f8, $04, $fc, $f4, $04, $fc, $f4, $04, $f4, $0c, $04, $fc, $f4, $04
 offsetLeftX:
 	;   $08, $10, $00, $08, $10, $08, $10, $08, $10, $00, $00, $00, $00, $08, $00, $08, $00, $08, $00, $08, $00, $08, $10, $10,
-	.db $fc, $04, $f4, $fc, $04, $fc, $04, $fc, $04, $f4, $f4, $f4, $f8, $00, $f8, $00, $f8, $00, $f8, $00, $f4, $fc, $04, $f4, $fc, $04, $f4, $04
+	.db $fc, $04, $f4, $fc, $04, $fc, $04, $fc, $04, $f4, $f4, $f4, $f8, $00, $f8, $00, $f8, $00, $f8, $00, $f4, $fc, $04, $f4, $fc, $04, $f4, $04, $f4, $fc, $04, $0c, $fc
 offsetY:
 	;   $00, $00, $08, $08, $08, $10, $10, $18, $18, $00, $10, $18, $f4, $f4, $fc, $fc, $04, $04, $0c, $0c, $00, $18, $18, xx
-	.db $f4, $f4, $fc, $fc, $fc, $04, $04, $0c, $0c, $f4, $04, $0c, $f4, $f4, $fc, $fc, $04, $04, $0c, $0c, $f4, $0c, $0c, $ec, $ec, $ec, $04, $04
+	.db $f4, $f4, $fc, $fc, $fc, $04, $04, $0c, $0c, $f4, $04, $0c, $f4, $f4, $fc, $fc, $04, $04, $0c, $0c, $f4, $0c, $0c, $ec, $ec, $ec, $04, $04, $0c, $0c, $0c, $0c, $04
