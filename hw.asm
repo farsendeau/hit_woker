@@ -80,11 +80,11 @@ playerStandingTimer .rs 1
 playerBlinkState .rs 1 ; Timer: 0 = no blinking, #$6f = max
 bossBlinkState .rs 1
 
+activeLowerIndex .rs 1
+
 var33 .rs 1 ; pour l'instant utilisé uniquement dans DrawBlocksScroll
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 var7B .rs 1
-
-
 
   .rsset $0100
 stack .rs 256 ; stack
@@ -108,7 +108,7 @@ unknownPalettes .rs 16
 objectSpriteNum     .rs 32 ;400
 objectFlags         .rs 32 ;420
 objectActionStateCounter .rs 32 ;440  compter changement d'état d'une action; ObjectUnknown440
-objectPosScreen      .rs 32 ; 460 ID écran ou se trouve l'object
+objectPosScreen      .rs 32 ; 460 ID écran ou se trouve l'object comment à 0
 objectCurrentScreen .rs 32 ; 480
 objectPosX          .rs 32 ; 4a0 Pos x de l'objet en px
 objectPosXfraction  .rs 32 ; 4c0
@@ -126,6 +126,8 @@ ObjectType          .rs 32 ; ennemi ID ; 600
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
 
+	.rsset $720
+roomActiveTable .rs 32  ; 6 octets par bloc 
 
 
 ; PPU const
@@ -147,7 +149,10 @@ ROOM_BLOCK_PALETTE   = $bbe0
 ROOM_ORDER           = $bC00
 ROOM_POINTER_TABLE   = $bC30
 ROOM_LAYOUT_TABLE    = $bc70 ; size = #$48
-ROOM_SPRITE_PALETTE1 = $bca0 
+ROOM_SPRITE_PALETTE1 = $bca0
+; ...
+ROOM_ACTIVES1        = $bE00
+ROOM_SHUTTER_INFO    = $bF80 
 
 ; Sprite
 SPRITE_TABLE = $0200 
@@ -362,7 +367,7 @@ Reset2:
 	jsr WriteChr
 	
 	; Init stage palette
-	jsr InitStagePalette
+	jsr InitStagePaletteAndActive
 
 	; $06 = nombre de ligne
 	lda #$09
@@ -536,7 +541,7 @@ SkitStage:
 
 StageBegin:
 	; to do palette
-	jsr InitStagePalette
+	jsr InitStagePaletteAndActive
 
 ; Chargement des deux NT
 StageBeginFromDeath:
@@ -756,9 +761,18 @@ ScrollNextRoom:
 	txa
 	pha
 	jsr DrawOneScreen
-	
+
+	; Check permier porte	
 	ldx stageId
-	; todo test porte
+	lda firstDoorLocations, x
+	cmp objectPosScreen;
+	bne .secondDoor
+	; .firstDood:
+
+	; todo update palette
+	jsr OpenFirstDoor
+
+	.secondDoor:
 
 	inc objectPosScreen
 	; todo gestion ennemi
@@ -812,6 +826,37 @@ shutter2Table: ;right, up, left, down. down=up, up=down
 shutterTable:
     ; shutter=right, up=up, shutter=left, down=down
     .db $20, $80, $20, $40, $00
+
+firstDoorLocations:
+	.db $00, $13 ; 1er octet mort...
+
+OpenFirstDoor:
+	;ldx stageId
+	lda #$00 ; firstDoorShutterDataIndex, x pour ROOM_SHUTTER_INFO, x
+	jmp AnimateDoor
+
+AnimateDoor:
+	inc objectLifeCycleCounter ; freeze player
+	lda stageId
+	
+	jsr BankSwitchStage
+
+	; todo sound ouverture porte
+
+	TAX
+	;lda ROOM_SHUTTER_INFO, x ; nb tiles de la porte (généralement #04)
+	;sta $07 ; $5A 
+	;inx 
+	;stx $06; 59
+
+	;.loop:
+	;	lda stageId
+;		jsr BankSwitchStage
+;		dec $07 ; on passe à la tuiles suivante
+;		bne .loop
+		
+;	tax 
+	rts
 
 PlayerIA:
 	ldx #$00
@@ -2478,16 +2523,14 @@ WriteChr:
 	lda saveBank  ; on récupère l'ancienne bank pour le rts
 	jmp BankSwitch
 
-;; PALETTE
-InitStagePalette:
-	;jsr BankSwitch10
+;; PALETTE ET ACTIFS
+InitStagePaletteAndActive:
 	lda stageId
 	jsr BankSwitchStage
 	;asl a
 	;tay
 	lda #LOW(ROOM_SPRITE_PALETTE1)
 	sta $01
-
 	lda #HIGH(ROOM_SPRITE_PALETTE1)
 	sta $02
 
@@ -2502,9 +2545,34 @@ InitStagePalette:
 		sta bGPalettes, y
 		dey
 		bpl .loop
+
+	lda stageId
+	beq .end
+
+	; Active
+	lda #LOW(ROOM_ACTIVES1) ; adresse mémoire des actifs dans stage bank
+	sta $01
+	lda #HIGH(ROOM_ACTIVES1)
+	sta $02
 	
-	lda saveBank
-	jmp BankSwitch
+	ldy #$00     ; nombre d'actif
+	lda [$01], y ; *6 parce qu'un actif à 6octets d'info
+	asl a
+	sta roomActiveTable ; *2
+	asl a ;*4
+	CLC ; pour faire le *6
+	adc roomActiveTable
+	tay
+
+	.loopActifs:
+		lda [$01], y
+		sta roomActiveTable - 1, y
+		dey
+		bne .loopActifs
+	 
+	.end: 
+		lda saveBank
+		jmp BankSwitch
 
 	rts 
 
@@ -2907,7 +2975,9 @@ CalculateNametableAddress:
 
 CheckCollisionAgainstActives:
 	lda forcedInputFlag
-	lda #$00
+	bne .end ; ignore ce test si forcedInputFlag
+	.end:
+		lda #$00
 	rts
 
 ; Transfere 4x4 blocs dans tsaPPUTransferData
@@ -3364,8 +3434,12 @@ AnalyzeCurrentTile:
 	.loop:
 		lda currentTuilesState, x ; 
 		bpl .posTiles
-		;/!\ Logiquement on passe jamais ici Todo à supprimer après test /!\
-	; tuiles dans l'interval [0x80; 0x00[
+		and #$7f
+		cmp #$03
+		bne .posTiles
+		lda #$02 ; porte doit s'ouvrir
+		sta currentStripeEndType
+		bne .do1And4
 	.posTiles:
 		cmp #$01 ; tuile = 01 (transparent)
 		beq .do1And4 
@@ -3476,7 +3550,7 @@ ReadCurrentStageMap:
 		ldy $06
 		lda BlockTransparencyMap, y
 		cmp #$02
-		bne .noClimbable
+		bne .noClimbable ; ou porte
 		lda objectId
 		bne .noPlayer
 		; pour le player
