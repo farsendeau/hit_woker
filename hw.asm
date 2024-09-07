@@ -80,7 +80,7 @@ playerStandingTimer .rs 1
 playerBlinkState .rs 1 ; Timer: 0 = no blinking, #$6f = max
 bossBlinkState .rs 1
 
-activeLowerIndex .rs 1
+activesLowerIndex .rs 1
 
 var33 .rs 1 ; pour l'instant utilisé uniquement dans DrawBlocksScroll
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
@@ -152,7 +152,8 @@ ROOM_LAYOUT_TABLE    = $bc70 ; size = #$48
 ROOM_SPRITE_PALETTE1 = $bca0
 ; ...
 ROOM_ACTIVES1        = $bE00
-ROOM_SHUTTER_INFO    = $bF80 
+ROOM_SHUTTER_BLOCK_DATA = $bf40
+ROOM_SHUTTER_INFO    = $bF80
 
 ; Sprite
 SPRITE_TABLE = $0200 
@@ -646,6 +647,7 @@ StageBeginFromDeath:
 	jsr NextFrame
 
 MainLoop:
+	jsr RecalculateActivesLowerIndex
 	jsr PlayerIA
 	lda playerWalkTimer
 	; todo gestion du run
@@ -834,29 +836,6 @@ OpenFirstDoor:
 	;ldx stageId
 	lda #$00 ; firstDoorShutterDataIndex, x pour ROOM_SHUTTER_INFO, x
 	jmp AnimateDoor
-
-AnimateDoor:
-	inc objectLifeCycleCounter ; freeze player
-	lda stageId
-	
-	jsr BankSwitchStage
-
-	; todo sound ouverture porte
-
-	TAX
-	;lda ROOM_SHUTTER_INFO, x ; nb tiles de la porte (généralement #04)
-	;sta $07 ; $5A 
-	;inx 
-	;stx $06; 59
-
-	;.loop:
-	;	lda stageId
-;		jsr BankSwitchStage
-;		dec $07 ; on passe à la tuiles suivante
-;		bne .loop
-		
-;	tax 
-	rts
 
 PlayerIA:
 	ldx #$00
@@ -1355,6 +1334,21 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		lda $00 ; tmp objectPosYFraction
 		sta objectPosYFraction, x
 		clc
+	rts
+
+RecalculateActivesLowerIndex:
+	ldy #$00
+	.loop:
+		lda roomActiveTable+1, y ; check l'écran actuel
+		cmp scrollPosScreen
+		bcs .end
+		tya
+		clc
+		adc #$06 ; next actif
+		tay
+		bne .loop
+	.end:
+		sty activesLowerIndex
 	rts
 
 
@@ -2870,8 +2864,9 @@ DrawBlockFromActiveLevelMap:
 	asl a
 	asl a
 	sta $0e 
+
+	; collision avec actifs 
 	ldy #$00
-	; Todo collision 
 	jsr CheckCollisionAgainstActives
 	tay
 	; Restore data
@@ -2976,6 +2971,56 @@ CalculateNametableAddress:
 CheckCollisionAgainstActives:
 	lda forcedInputFlag
 	bne .end ; ignore ce test si forcedInputFlag
+
+	.loop:
+		lda roomActiveTable, y ; type d'actif $00 = on zappe
+		beq .next
+		lda roomActiveTable+1, y ; écran
+		cmp $0c ; object actual screen
+		beq .checkX1 ; active = object, check colision   
+		bcc .next ;  ; active >= object, safe
+		jmp .end
+		.checkX1:
+			lda roomActiveTable+2, y
+			cmp $0d ; object x
+			beq .checkX2 ; active = object, next check x2
+			bcs .next ; active >= object, safe
+		.checkX2:
+			lda roomActiveTable+4, y 
+			beq .checkY1 ; a = $00 no right no check
+			beq .next ; active = object, safe object next to active
+			bcc .next ; active >= object, idem
+		.checkY1:
+			lda roomActiveTable+3,y 
+			cmp $0E ; object y
+			beq .checkY2  ; active = object, check y2
+			bcs .next ; active < object, safe
+		.checkY2:
+			lda roomActiveTable+5, y
+			beq .shutter ; a $ 00, top no check y2
+			cmp $0E ; object y
+			beq .next ; active = object, safe object next to active
+			bcc .next ; active >= object, idem
+		.shutter:
+			lda objectId
+			bne .anotherTYpe
+			; pour le player
+			lda roomActiveTable, y ;type active
+			ora #$80
+			rts
+		.anotherTYpe: ; je sais pas encore
+			cmp #$04 
+			beq .end
+			lda #$01
+			rts
+		.next:
+			tya
+			clc
+			adc #$06 ; un actif à 6 octets d'info
+			tay
+			bne .loop
+
+
 	.end:
 		lda #$00
 	rts
@@ -3471,8 +3516,13 @@ AnalyzeCurrentTile:
 		jmp KillPlayer	
 	
 ReadCurrentStageMap:
-	; todo collision avec actives
-
+	; collision avec actifs
+	ldy activesLowerIndex
+	jsr CheckCollisionAgainstActives
+	cmp #$00
+	beq .next
+		rts
+	.next:
 	; check bord de l'écran bas
 	lda $0e ; blocY  à checker
 	cmp #$f0 ; bord bas de l'écran 
@@ -3579,6 +3629,79 @@ CurrentTileStateTable:
 	.db $04 ; tuile échelle au dessus (2px)
 	.db $02 ; tuile échelle au dessus (4px)
 
+AnimateDoor:
+	pha ; save iterator pour ROOM_SHUTTER_INFO 
+
+	inc objectLifeCycleCounter ; freeze player
+	lda stageId
+	jsr BankSwitchStage
+	
+	; todo sound ouverture porte
+	pla ; restore iterator
+	TAX
+	lda ROOM_SHUTTER_INFO, x ; nb tiles de la porte (généralement #04)
+	sta $11 ; $5A data shutter
+	inx ; inc et save iterator
+	stx $10; 59
+
+	.loop:
+        lda stageId
+        jsr BankSwitchStage
+
+		ldx $10 ; load iterator
+		lda #$00
+		sta $0d ; offset tsaPPUTransfer
+
+		lda objectPosScreen
+		sta $05
+		lda ROOM_SHUTTER_INFO, x
+		sta $04; numero de colonne
+		inx 
+		stx $10 ; save iterator
+		jsr CalculateNametableAddress ;todo comprendre pour quoi $4 = $f0
+		ldy $10 ; restore iterator
+		lda ROOM_SHUTTER_INFO, y
+		;asl a
+		;asl a
+		adc #LOW(ROOM_SHUTTER_BLOCK_DATA)
+		sta currentRoomPointer
+		lda #HIGH(ROOM_SHUTTER_BLOCK_DATA)
+		sta currentRoomPointer+1
+		ldy #$00
+		jsr Write32x32BlockToBuffer
+		jsr Adjust32x32BlockAddress 
+
+		ldx $10 ; restore iterator
+		ldy ROOM_SHUTTER_INFO, x
+		; TODO gesion des palettes
+		; lda ROOM_SHUTTER_BLOCK_PALS,y 
+		sta tsaPPUTransferAttrAddress
+		inx 
+		stx $10; save iterator
+
+		lda #$01
+		sta tsaPPUtransferSize; 1 bloc
+		lda #$06
+		jsr TimeDelayWithSpriteUpdates
+		
+		dec $11 ; dec nombre de bloc
+		bne .loop
+
+		lda #$00
+		sta objectLifeCycleCounter; defreeze player
+	rts
+
+; A nb frame en pause
+TimeDelayWithSpriteUpdates:
+	sta miscCounter
+	.loop:
+		jsr UpdateGraphics
+		jsr NextFrame
+		dec miscCounter
+		bne .loop
+
+	rts
+
 
 SpikeKill1:
 	jmp KillPlayer
@@ -3665,6 +3788,10 @@ KillPlayer:
 
 ;-------Graphics-----------
 UpdateGraphics:
+	lda saveBank
+	jsr BankSwitch
+	
+
     ; hide tous les sprites
 	ldy #$00
 	sty $0d ;  save spriteCounter

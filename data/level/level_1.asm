@@ -22,25 +22,25 @@
   .org $B000
 	; ROOM_BLOCK_DATA 
 	;   Si ajout de bloc =  ajout de pal (ROOM_BLOCK_PALETTE)
-	.db $00, $00, $00, $00
-	.db $00, $00, $44, $00
-	.db $44, $00, $00, $00
-	.db $48, $48, $4c, $4c
-	.db $44, $40, $44, $40
-	.db $40, $40, $40, $40
-	.db $44, $00, $44, $00
-	.db $80, $80, $44, $00
-	.db $04, $08, $0c, $10
-	.db $80, $80, $00, $00
-	.db $40, $40, $80, $80
-	.db $40, $40, $00, $00
-	.db $00, $44, $00, $44
-	.db $00, $00, $80, $80
-	.db $00, $00, $44, $40
-	.db $00, $40, $00, $80
-	.db $80, $44, $00, $44
-	.db $c0, $44, $c0, $44
-	.db $84, $84, $84, $84
+	.db $00, $00, $00, $00 ; 00
+	.db $00, $00, $44, $00 ; 01
+	.db $44, $00, $00, $00 ; 02
+	.db $48, $48, $4c, $4c ; 03
+	.db $44, $40, $44, $40 ; 04
+	.db $40, $40, $40, $40 ; 05
+	.db $44, $00, $44, $00 ; 06
+	.db $80, $80, $44, $00 ; 07
+	.db $04, $08, $0c, $10 ; 08
+	.db $80, $80, $00, $00 ; 09
+	.db $40, $40, $80, $80 ; 0a
+	.db $40, $40, $00, $00 ; 0b
+	.db $00, $44, $00, $44 ; 0c
+	.db $00, $00, $80, $80 ; 0d
+	.db $00, $00, $44, $40 ; 0e
+	.db $00, $40, $00, $80 ; 0f
+	.db $80, $44, $00, $44 ; 10
+	.db $c0, $44, $c0, $44 ; 11
+	.db $84, $84, $84, $84 ; 12
 
 roomBlockDataStage10:
 	.db $00, $00, $00, $06, $00, $00, $04, $05
@@ -279,6 +279,7 @@ roomBlockDataStage102:
 
 
 ;...
+
    ; ROOM_ACTIVES1 , check la taille de roomActiveTable
 ;------------+-----------------
 ;       info active
@@ -289,7 +290,28 @@ roomBlockDataStage102:
 ;01          | screen ou se trouve l'active
 ;02-03-04-05 | x1, y1, x2, y2 (gauche, haut, droite, bas [pour haut, droite skipe check si = $00])
   .org $bE00
-	.db $02 ; nombre d'actrive
+	.db $03 ; nombre d'actif
 	; actifs
+	.db $00, $02, $00, $00, $00, $ff
+	.db $00, $03, $00, $00, $00, $ff
 	.db $03, $13, $e0, $60, $00, $a0
-	.db $00, $00, $00, $00, $00, $ff
+	
+  .org $bf40
+	.db $f0
+
+; ROOM_SHUTTER_BLOCK_DATA = $bf40
+  .org $bf40
+	.db $84
+	.db $00
+
+
+; ROOM_SHUTTER_INFO
+;------------+-----------------
+;       info shutter
+;------------------------------
+;byte #      | what it tells us
+;------------+----------------
+;00          | nombre de meta tiles (2*2)
+;0*1-0*2     | colonne ou se trouve le shtter ($f0 dernière 1colonne = 2tiles) / id bloc dans la mémoire
+  .org $bf80
+	.db $04, $f0, $00, $f0, $01, $ec, $00, $ec, $01
