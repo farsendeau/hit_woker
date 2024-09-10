@@ -286,15 +286,16 @@ roomBlockDataStage102:
 ;------------------------------
 ;byte #      | what it tells us
 ;------------+----------------
-;00          | type: $03=rideau,
+;00          | type: $03=rideau, $01=transparent mais bloquant
 ;01          | screen ou se trouve l'active
 ;02-03-04-05 | x1, y1, x2, y2 (gauche, haut, droite, bas [pour haut, droite skipe check si = $00])
   .org $bE00
-	.db $03 ; nombre d'actif
+	.db $04 ; nombre d'actif
 	; actifs
 	.db $00, $02, $00, $00, $00, $ff
 	.db $00, $03, $00, $00, $00, $ff
 	.db $03, $13, $e0, $60, $00, $a0
+	.db $01, $14, $00, $60, $10, $a0
 	
   .org $bf40
 	.db $f0

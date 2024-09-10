@@ -1501,8 +1501,92 @@ DoScrolling:
 HorizontalScrollPoint:
 	lda objectSpriteNum
 	cmp #$09 ; Jump/fall ?
+	beq .updateAction
+	lda objectActionStateCounter
+	and #$30
+	sta objectActionStateCounter
+	lda #$06 ; player run
+
+    .updateAction:
+		sta objectSpriteNum
 	
+	; Ajustement de la position du perso
+	lda currentStripeEndType
+	sec
+	sbc #$01
+	lsr a
+	tax
+	lda #$00
+	sta $10 ; $5a
+	lda horizontalScrollIncrementTable, x
+	sta $11 ; $5b
+	lda objectPosX
+	cmp #$e0 ; perso est au niveau de la première porte
+	bcc .initScrollPos
+	lda horizontalScrollPosXFractionTable, x
+	sta $10
+	lda horizontalScrollPosXtable, x
+	sta $11
+	
+	.initScrollPos:
+		lda #$00
+		sta scrollPosX
+		sta scrollPosY
+
+	ldy horizNumberOfFramesToScroll, x
+	.loop:
+		clc
+		lda objectPosXfraction
+		adc $10
+		sta objectPosXfraction
+		lda objectPosX
+		adc $11
+		sta objectPosX
+		clc
+		lda scrollPosX
+		adc horizScrollIncrement, x
+		sta scrollPosX
+		tya
+		pha
+		txa
+		pha
+
+		jsr UpdateGraphics
+		; todo loadEnemyGraphics
+		jsr NextFrame
+
+		pla
+		tax
+		pla
+		tay
+
+		dey
+		bne .loop
+
+	; Reset s
+	lda #$18
+	sta objectPosX
+	lda #$00
+	sta scrollPosX
+	sta scrollPosY
+	sta objectSpriteNum
+	sta objectActionStateCounter
+
 	rts
+
+; backward Scrolling, player X increment
+horizontalScrollIncrementTable: 
+	.db $01, $FF
+; Scrolling, increments ObjectPosXfraction
+horizontalScrollPosXFractionTable: 
+	.db $B0, $50  
+; forward scrolling, player X increment
+horizontalScrollPosXtable: 
+	.db $00, $FF 
+horizNumberOfFramesToScroll: 
+	.db $3F, $40
+horizScrollIncrement:   
+	.db $04, $fc
 
 ; Scrolling vertical de la ppu
 VerticalScrollPoint:
@@ -2988,6 +3072,7 @@ CheckCollisionAgainstActives:
 		.checkX2:
 			lda roomActiveTable+4, y 
 			beq .checkY1 ; a = $00 no right no check
+			cmp $0d
 			beq .next ; active = object, safe object next to active
 			bcc .next ; active >= object, idem
 		.checkY1:
@@ -3019,7 +3104,6 @@ CheckCollisionAgainstActives:
 			adc #$06 ; un actif à 6 octets d'info
 			tay
 			bne .loop
-
 
 	.end:
 		lda #$00
