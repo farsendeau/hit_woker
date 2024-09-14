@@ -297,9 +297,6 @@ roomBlockDataStage102:
 	.db $03, $13, $e0, $60, $00, $a0
 	.db $01, $14, $00, $60, $10, $a0
 	.db $01, $17, $00, $60, $10, $a0
-	
-  .org $bf40
-	.db $f0
 
 ; ROOM_SHUTTER_BLOCK_DATA = $bf40
 ; id bloc dans la mémoire
@@ -323,6 +320,11 @@ roomBlockDataStage102:
 	.db $84
 	.db $00
 	.db $00
+
+;ROOM_SHUTTER_BLOCK_PALS
+  .org $bf70
+	.db $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+
 
 
 ; ROOM_SHUTTER_INFO

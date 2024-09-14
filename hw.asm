@@ -154,6 +154,7 @@ ROOM_SPRITE_PALETTE1 = $bca0
 ; ...
 ROOM_ACTIVES1        = $bE00
 ROOM_SHUTTER_BLOCK_DATA = $bf40
+ROOM_SHUTTER_BLOCK_PALS = $bF70
 ROOM_SHUTTER_INFO    = $bF80
 
 ; Sprite
@@ -3807,9 +3808,8 @@ AnimateDoor:
 
 		ldx $10 ; restore iterator
 		ldy ROOM_SHUTTER_INFO, x
-		; TODO gesion des palettes
-		; lda ROOM_SHUTTER_BLOCK_PALS,y 
-		sta tsaPPUTransferAttrAddress
+		lda ROOM_SHUTTER_BLOCK_PALS, y
+		sta tsaPPUTransferAttrData
 		inx 
 		stx $10; save iterator
 
