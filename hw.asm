@@ -66,6 +66,7 @@ previousEnemyIndex .rs 1
 currentEnemyIndex .rs 1
 
 bossCurrentStrategy .rs 1
+bossFightingId .rs 1 ; FightingBossNum
 
 totalObjects .rs 1
 objectId .rs 1 ;(RefObjectNumber)
@@ -652,6 +653,8 @@ MainLoop:
 	lda playerWalkTimer
 	; todo gestion du run
 
+	jsr RunBossIA
+
 	jsr UpdateGraphics
 
 	; scrolling vertical
@@ -768,14 +771,23 @@ ScrollNextRoom:
 	ldx stageId
 	lda firstDoorLocations, x
 	cmp objectPosScreen;
-	bne .secondDoor
+	bne .bossDoor
 	; .firstDood:
-
-	; todo update palette
-	jsr OpenFirstDoor
-
-	.secondDoor:
-
+		; todo update palette
+		jsr OpenFirstDoor
+	.bossDoor:
+		; la fermeture de la boss door se fait RunBossIA
+		; 	avec le lancement de la music 
+		ldx stageId
+		stx bossFightingId
+		lda #$70
+		sta miscCounter
+		lda objectPosScreen
+		cmp bossDoorLocations, x
+		bne .runScrolling
+		lda #$01
+		sta bossCurrentStrategy
+	.runScrolling:
 	inc objectPosScreen
 	; todo gestion ennemi
 
@@ -829,13 +841,7 @@ shutterTable:
     ; shutter=right, up=up, shutter=left, down=down
     .db $20, $80, $20, $40, $00
 
-firstDoorLocations:
-	.db $00, $13 ; 1er octet mort...
 
-OpenFirstDoor:
-	;ldx stageId
-	lda #$00 ; firstDoorShutterDataIndex, x pour ROOM_SHUTTER_INFO, x
-	jmp AnimateDoor
 
 PlayerIA:
 	ldx #$00
@@ -1068,6 +1074,29 @@ PlayerIA:
 		sta objectActionStateCounter
 	.end:
 		rts
+
+RunBossIA
+	lda bossCurrentStrategy
+	cmp #$01
+	bcs .run
+	lda #$00
+	sta objectLifeMeter+1 ; vie du boss à zéro
+		rts 
+	.begin: 
+		jmp BossIABegin
+	.run:
+		bne .begin ; si c'est >= 01  
+
+	lda stageId
+	cmp bossFightingId ; FightingBossNum
+	jsr CloseBossDoor
+	inc bossCurrentStrategy
+	rts
+
+BossIABegin:
+
+	rts
+
 
 LadderInit:
 	; init du flag
@@ -3713,6 +3742,27 @@ CurrentTileStateTable:
 	.db $04 ; tuile échelle au dessus (2px)
 	.db $02 ; tuile échelle au dessus (4px)
 
+firstDoorLocations:
+	.db $00, $13 ; 1er octet mort...
+
+; FirstDoorShutterDataIndex
+bossDoorLocations: 
+	.db $00, $16	
+
+OpenFirstDoor:
+	;ldx stageId
+	lda #$00 ; firstDoorShutterDataIndex, x pour ROOM_SHUTTER_INFO, x
+	jmp AnimateDoor
+
+; BossRoomShutterDataIndex
+bossRoomShutterData:
+	.db $00, $09
+
+CloseBossDoor:
+	ldx stageId
+	lda bossRoomShutterData, x
+	; go AnimateDoor 
+	; /!\ NE PAS DEPLACER
 AnimateDoor:
 	pha ; save iterator pour ROOM_SHUTTER_INFO 
 
@@ -3738,13 +3788,13 @@ AnimateDoor:
 
 		lda objectPosScreen
 		sta $05
-		lda ROOM_SHUTTER_INFO, x
+		lda ROOM_SHUTTER_INFO, x ; colonne
 		sta $04; numero de colonne
 		inx 
 		stx $10 ; save iterator
 		jsr CalculateNametableAddress ;todo comprendre pour quoi $4 = $f0
 		ldy $10 ; restore iterator
-		lda ROOM_SHUTTER_INFO, y
+		lda ROOM_SHUTTER_INFO, y; tuile
 		;asl a
 		;asl a
 		adc #LOW(ROOM_SHUTTER_BLOCK_DATA)

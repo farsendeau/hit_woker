@@ -290,19 +290,38 @@ roomBlockDataStage102:
 ;01          | screen ou se trouve l'active
 ;02-03-04-05 | x1, y1, x2, y2 (gauche, haut, droite, bas [pour haut, droite skipe check si = $00])
   .org $bE00
-	.db $04 ; nombre d'actif
+	.db $05 ; nombre d'actif
 	; actifs
 	.db $00, $02, $00, $00, $00, $ff
 	.db $00, $03, $00, $00, $00, $ff
 	.db $03, $13, $e0, $60, $00, $a0
 	.db $01, $14, $00, $60, $10, $a0
+	.db $01, $17, $00, $60, $10, $a0
 	
   .org $bf40
 	.db $f0
 
 ; ROOM_SHUTTER_BLOCK_DATA = $bf40
+; id bloc dans la mémoire
   .org $bf40
 	.db $84
+	.db $00
+	.db $84
+	.db $00
+
+	.db $00
+	.db $00
+	.db $00
+	.db $00
+
+	.db $84
+	.db $00
+	.db $00
+	.db $00
+
+	.db $84
+	.db $84
+	.db $00
 	.db $00
 
 
@@ -313,6 +332,7 @@ roomBlockDataStage102:
 ;byte #      | what it tells us
 ;------------+----------------
 ;00          | nombre de meta tiles (2*2)
-;0*1-0*2     | colonne ou se trouve le shtter ($f0 dernière 1colonne = 2tiles) / id bloc dans la mémoire
+;0*1-0*2     | colonne/line ou se trouve le shutter ($f0 f=colonne 0=line)) / id ROOM_SHUTTER_BLOCK_DATA
   .org $bf80
-	.db $04, $f0, $00, $f0, $01, $ec, $00, $ec, $01
+	.db $04, $f0, $00, $f0, $04, $ec, $00, $ec, $04
+	.db $04, $0c, $08, $0c, $0c, $10, $08, $10, $0c
