@@ -20,7 +20,7 @@ PPU2000value .rs 1
 PPU2001Value .rs 1
 
 tmpPosScreen .rs 1     
-tmpPosXFraction .rs 1 
+tmpPosXFraction .rs 1
 tmpPosX .rs 1         
 tmpPosY .rs 1     
 
@@ -70,9 +70,11 @@ bossFightingId .rs 1 ; FightingBossNum
 
 totalObjects .rs 1
 objectId .rs 1 ;(RefObjectNumber)
+objectHitType .rs 1 ; ObjectReceivedHitType 
 
 weaponMeter .rs 6
 weaponSelect .rs 1
+weaponFiring .rs 1
 meters .rs 5 ; Life
 drawMetersFlag .rs 1
 
@@ -655,7 +657,8 @@ MainLoop:
 	; todo gestion du run
 
 	jsr RunBossIA
-
+	;jsr RunWeaponIA
+	jsr RunObjectIA
 	jsr UpdateGraphics
 
 	; scrolling vertical
@@ -929,6 +932,7 @@ PlayerIA:
 	; facingRight
 	jsr ObjectUpdateMovementRight
 	jmp .autoCenterScreen
+
 	.facingLeft:
 		jsr ObjectUpdateMovementLeft
 
@@ -940,8 +944,8 @@ PlayerIA:
 		lda joyD
 		and #$02             ; si press b
 		beq .checkSpeed      ; non
-		;jsr PlayerWeaponFire ; oui
-		; bne +
+		jsr PlayerWeaponFire ; oui
+
 	.checkSpeed:
 		lda objectYSpeed
 		bmi .speedMi     ; si FF
@@ -951,8 +955,10 @@ PlayerIA:
 		and #$01 ; continue press A jump
 		beq	.fallingJump
 		jmp .continueJump
+
 	.goEnd:
 		jmp .end
+
 	.fallingJump:
 		lda objectYSpeed
 		bmi .goJump
@@ -963,6 +969,7 @@ PlayerIA:
 		sta objectYSpeed
 		lda #$00
 		sta objectYSpeedFraction
+
 	.goJump:	
 		jmp .continueJump
 
@@ -985,14 +992,17 @@ PlayerIA:
 		bne .jumpCheckPosY
 		lda #$09
 		sta objectSpriteNum
+
 	.jumpSound:
 		; lda sound id
 		; jsr playsound
+
 	.jumpCheckPosY:
 		lda tmpPosY
 		cmp objectPosY
 		bcs .setTmpPosY
 		;check shake player
+
 	.setTmpPosY:	
 		lda objectPosY
 		sta tmpPosY
@@ -1027,14 +1037,17 @@ PlayerIA:
 		bne .goEnd2    
 		; on fait ralentir le player
 		lda #$0C ; slow down
+
 	.setSpriteNum:
 		sta objectSpriteNum
 		lda #$01
 		sta objectActionStateCounter
+
 	.goEnd1:	
 		; from 95D5: was not in a jumping state
 		lda objectActionStateCounter
 		bne .end ; END
+
 	.goEnd2:
 		lda #$00 ; standing
 		sta objectSpriteNum
@@ -1056,6 +1069,7 @@ PlayerIA:
 		sta objectSpriteNum
 		;lda #$00
 		;sta objectActionStateCounter
+
 	.makeRunningEnd:
 		lda #$00 ; standing
 		sta objectActionStateCounter
@@ -1073,6 +1087,7 @@ PlayerIA:
 		sta objectSpriteNum
 		lda #$00
 		sta objectActionStateCounter
+		
 	.end:
 		rts
 
@@ -1095,8 +1110,313 @@ RunBossIA
 	rts
 
 BossIABegin:
+	
+	rts
+
+; /!\ doit être suivi de ObjectShouldBeDestroyed ne pas déplacer /!\
+RunObjectIA:
+	ldx #$02     ; on commence par les shoots
+	stx objectId
+	RunObjectIA_loopObject:
+		ldx objectId
+		lda objectPosY, x ; objet est actif ?
+		cmp #$f8
+		bne .checkSprite ; oui
+		jmp RunObjectIA_nextObject ; non, object suivant
+		.checkSprite:
+			lda objectSpriteNum, x
+			cmp #$ff
+			bne .shoot
+			; todo ici DoEnemyIA
+			; jmp .nextObject
+		.shoot:
+			lda objectLifeCycleCounter, x ; object actif ?
+			bne .checkIfOutScreen ; non
+			            ; oui
+			; todo plein de truc
+		.updateMouvementRight:
+			lda objectFlags, x
+			and #$40
+			beq .updateMouvementLeft
+			jsr ObjectUpdateMovementRight
+			jmp .relocateHorizontally
+		.updateMouvementLeft:
+			jsr ObjectUpdateMovementLeft
+		.relocateHorizontally:
+			jsr ObjectRelocateHorizontally	
+		.checkIfOutScreen:
+			sec
+			lda objectPosX, X
+			sbc scrollPosX
+			lda objectPosScreen, x
+			sbc scrollPosScreen
+			beq .checkDestroy ; si pas > 0 c'est out of screen
+			lda #$01
+			jmp ObjectShouldBeDestroyed
+		.checkDestroy:
+			; jmp ObjectShouldBeDestroyed
+	RunObjectIA_nextObject:
+		inc objectId ; on passe à l'objet suivant
+		lda totalObjects
+		cmp objectId ; est-ce que c'était le dernier object ?
+		beq .end ; oui fin
+		jmp RunObjectIA_loopObject ; non go début de la loop
+
+	.end:
 
 	rts
+
+; /!\ doit suivre RunObjectIA ne pas déplacer /!\
+; A = Hit type
+;   0 = hit because ObjectFlags had bit #8 clear and Unknown440=0
+;   1 = scrolled out from screen
+;   3 = $2A was nonzero (at $9961)
+;   4 = dropped in a pit (ObjectCheckIfOutScreenVertically returned carry set)
+;   5 = hit by weapon
+;
+ObjectShouldBeDestroyed
+	sta objectHitType
+	ldy #$2d          ; ObjectHitRoutineTable 15(1 db + 1 wd) = 45 ou 0x2d 
+	ldx objectId
+	lda objectSpriteNum, X
+	.loop:
+		cmp objectHitRoutineTable, y
+		beq .selectedDestroyRoutine
+		dey ; une ligne = 3 db
+		dey
+		dey
+		bpl .loop
+		
+		ldy #$00 ; si rien de trouvé la default est selectionnée
+
+	.selectedDestroyRoutine:
+		LDA objectHitRoutineTable+1,y
+		sta $00
+		LDA objectHitRoutineTable+2,Y
+		sta $01
+		jmp [$00]
+
+;
+; .db xx   = 1 id du sprite
+; .dw xxxx = routine de destroye de l'object 
+; 
+objectHitRoutineTable:
+    .byte $19 ; default id
+	.word Sprite19ShouldBeDestroyedAndDefault ; default routine
+    .byte $27
+	.word Sprite27ShouldBeDestroyedAndDefault
+    .byte $32
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $36
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $4C
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $4D
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $4E
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $4F
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $50
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $51
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $52
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $53
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $39
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $5A
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $6C
+	.word Sprite19ShouldBeDestroyedAndDefault
+    .byte $5D
+	.word Sprite19ShouldBeDestroyedAndDefault
+
+
+Sprite19ShouldBeDestroyedAndDefault:
+	lda objectHitType
+	cmp #05
+	bne DeleteObjectThatWasScrolledOut
+
+DeleteObjectThatWasScrolledOut 
+	ldx objectId
+	lda #$f8
+	sta objectPosY, x
+	jmp RunObjectIA_nextObject
+
+
+Sprite27ShouldBeDestroyedAndDefault:
+	; todo
+	jmp Sprite19ShouldBeDestroyedAndDefault
+
+RunWeaponIA:
+	; todo check object colision
+	lda weaponSelect
+	asl A
+	tay
+	lda weaponIATable, y
+	sta $00
+	lda weaponIATable, y
+	sta $01
+	jmp [$00]
+
+weaponIATable:
+	.dw weaponIAA
+	.dw weaponIAB
+
+weaponIAA:
+	ldx #$02
+	lda #$05
+	; got WeaponIATestShotHit
+	; /!\ ne pas bouger /!\
+
+; A = id objet max (ex pour A c'est 5 car id min 2 + 3 shoot en même temps)
+; X = id objet mini (ex pour A 2)
+WeaponIATestShotHit:
+	rts
+
+weaponIAB:
+	rts
+
+PlayerWeaponFire:
+	lda weaponSelect 
+	tax
+	asl A
+	TAY
+	beq .selectWeapon ; le premier weapon (coup de poing) n'a pas besoin de meter
+	lda weaponMeter, x
+	bne .selectWeapon
+	rts ; Si plus de jus pour le weapon on fait rien
+	.selectWeapon:
+		lda weaponSelectTable, y ; table de word
+		sta $00
+		lda weaponSelectTable + 1, Y
+		sta $01
+		jmp [$00] ; jump WeaponFireXX
+
+weaponSelectTable:
+	.dw WeaponFireHand
+
+WeaponFireHand:
+	ldx #$02 ; les shoots commence au troisième objet
+	.loopShoot:
+		lda objectPosY, x
+		cmp #$f8 ; #$f8 = objet dispo
+		beq .launch
+		inx 
+		cpx #$05 ; max 3 shot en même temps sur l'écran
+		bne .loopShoot
+		beq .end ; aucun de dispo fin
+	.launch:	
+		lda #$04 ; type de weapon
+		jsr LaunchWeaponShot
+		lda #$1f
+		sta objectFireDelay ; delai avant shoot (player)
+
+		; todo sound
+
+		lda #$c0
+		sta weaponFiring
+
+	.end:
+		ldx objectId
+	rts
+
+; X = objet id
+; A = fire type
+;     0 = ??
+;     1 = ??
+;     2 = ??
+;     3 = ??
+;     4 = hand
+;     5 = ??
+;     6 = ??
+LaunchWeaponShot:
+	sta $02 ; *9 ; todo voir pour passer à 8
+	asl a ;*2
+	asl a ;*4
+	asl a ;*8
+	clc
+	adc $02 ; ajout de $02 pour faire *9
+	tay
+	lda objectPosY, x
+	cmp #$f8 ; dispo, voir si besoin de ce check
+	beq .initFire
+	sec ; sinon fin
+	rts
+
+	.initFire:
+		lda weaponFireData, y ; sprite
+		sta objectSpriteNum, x
+		lda weaponFireData + 1, y ; counter de changement de metasprite
+		sta objectActionStateCounter, x
+		lda objectFlags ; direction du perso
+		and #$40 ; ?droite
+		php ; save du sens
+		ora weaponFireData + 2, y ; sens du perso + autres flags 
+		sta objectFlags, x
+		; init divers
+		lda #$00
+		sta objectLifeCycleCounter, x
+		sta objectFireDelay, x
+		sta objectPosXfraction, x
+		sta objectPosYFraction, x
+
+		lda weaponFireData + 3, y ; y speed fraction
+		sta objectYSpeedFraction, x
+		lda weaponFireData + 4, y ; y speed
+		sta objectYSpeed, x
+		lda weaponFireData + 5, y ; x speed fraction
+		sta objectXSpeedFraction, x
+		lda weaponFireData + 6, y ; x speed
+		sta objectXSpeed, x
+		clc            
+		lda objectPosY            ; on ajout le y du perso
+		adc weaponFireData + 7, y 
+		lda objectPosY
+		cmp #$f8 ; si pas en dehors de l'écran
+		bne .setPosX
+		lda #$f9
+	.setPosX:
+		sta objectPosY, x
+		lda objectPosX
+		plp ; restore direction perso
+		beq .gauche
+	; droite:
+		clc
+		adc weaponFireData + 8, y
+		sta objectPosX, x
+		lda objectPosScreen
+		adc #$00 ; juste add carry
+		jmp .end
+	.gauche:
+		sec
+		sbc weaponFireData + 8, y
+		sta objectPosX, X
+		lda objectPosScreen
+		sbc #$00 ; juste substract carry
+	.end:
+		sta objectPosScreen, x
+		clc
+	rts 
+
+; 0->ObjectSpriteNum (metaSpritesActionTable)
+; 1->ObjectUnknown440
+; 2->ObjectFlags
+; 3->ObjectYSpeedFraction
+; 4->ObjectYSpeed
+; 5->ObjectXSpeedFraction
+; 6->ObjectXSpeed
+; 7->ObjectPosY
+; 8->ObjectPosX
+weaponFireData:
+    .db $60,$00,$04,$00,$00,$00,$04,$00,$10 ;f shoot
+    .db $61,$00,$04,$00,$00,$00,$00,$EC,$00 ;f shield (?)
+    .db $00,$00,$24,$00,$00,$00,$00,$F0,$10 ;guts debris
+    .db $6C,$00,$15,$00,$03,$A0,$03,$F0,$10 ;guts block being carried(?)
+    .db $02,$00,$00,$00,$00,$00,$04,$00,$10 ;P
 
 
 LadderInit:
@@ -1747,13 +2067,20 @@ ObjectUpdateMovementRight:
 
 	ldx objectId
 	beq .player ; si player
-	; ennemi
-	;  TODO
+
+	.object:
+		sta tmpPosScreen
+		sty tmpPosX
+		lda objectFlags, x
+		and #$01 ; collision avec background
+		bne .checkCollisionBackground
+		rts 
+
 	.player:
-	cmp currentEndScreen ; le player est ou par rapport au dernier écran
-	beq .beginningEndStrip ; si = ??pas bon label
-	bcs .updateStripe ; >
-	bne .setObjectPosScrenAndPosX  ; <> (donc ici <)
+		cmp currentEndScreen ; le player est ou par rapport au dernier écran
+		beq .beginningEndStrip ; si = ??pas bon label
+		bcs .updateStripe ; >
+		bne .setObjectPosScrenAndPosX  ; <> (donc ici <)
 
 	.beginningEndStrip:
 		cpy #$EF ; si posX est à la fin de l'écran
@@ -1770,12 +2097,13 @@ ObjectUpdateMovementRight:
 		sta tmpPosScreen ; tmp objectPosScreen
 		sty tmpPosX ; tmp objectPosX
 
-	; Collision background
-	ldy objectSpriteNum, x
-	cpy #$ff
-	bne .widthTablePlayer
+	.checkCollisionBackground:
+		ldy objectSpriteNum, x
+		cpy #$ff
+		bne .widthTablePlayer
 	; widthTableEnemy
 	;  TODO
+
 	.widthTablePlayer:
 		lda playerXWidthTable, y
 
@@ -1824,34 +2152,44 @@ ObjectUpdateMovementLeft:
 
 	ldx objectId
 	beq .player ; si player
-	; ennemi
-	;  TODO
+
+	.object:
+		sta tmpPosScreen
+		sty tmpPosX
+		lda objectFlags, x
+		and #$01 ; collision avec background
+		bne .checkCollisionBackground
+		rts 
+
 	.player:
-	cmp currentBeginScreen ; le player est ou par rapport au premier écran
-	bmi .beforBeginScreen ; Avant le premier ecran (logiquement pas possible)
-	beq .isBeginScreen ; si =
-	bcc .beforBeginScreen
-	bne .setObjectPosScrenAndPosX  ; <> (donc ici <)
+		cmp currentBeginScreen ; le player est ou par rapport au premier écran
+		bmi .beforBeginScreen ; Avant le premier ecran (logiquement pas possible)
+		beq .isBeginScreen ; si =
+		bcc .beforBeginScreen
+		bne .setObjectPosScrenAndPosX  ; <> (donc ici <)
 
 	.isBeginScreen:
 		cpy #$10 ; si la posX = #$10
 		bcs .setObjectPosScrenAndPosX
+
 	.beforBeginScreen:
 		lda currentBeginScreen
 		ldy #$10
 		ldx #$04
 		stx currentStripeEndType 
 		ldx #$00
+
 	.setObjectPosScrenAndPosX:
 		sta tmpPosScreen ; tmp objectPosScreen
 		sty tmpPosX ; tmp objectPosX
 
-	; Collision background
-	ldy objectSpriteNum, x
-	cpy #$ff
-	bne .widthTablePlayer
-	; widthTableEnemy
-	;  TODO
+	.checkCollisionBackground:
+		ldy objectSpriteNum, x
+		cpy #$ff
+		bne .widthTablePlayer
+		; widthTableEnemy
+		;  TODO
+
 	.widthTablePlayer:
 		lda playerXWidthTable, y
 
@@ -1884,19 +2222,9 @@ ObjectUpdateMovementLeft:
 		lda $01
 		adc #$00
 		sta tmpPosScreen
+
 	.end:
 		rts
-
-
-		lda $00   ; tmp tmp objectPosX
-		and #$f0
-		ldx objectId
-		sec
-		sbc $10
-		sta tmpPosX
-		lda $01
-		sbc #$00
-		sta tmpPosScreen
 
 HandleSpeed:
 	ldy #$00
@@ -1963,7 +2291,7 @@ ScrollProcess:
 		and #$80
 		beq .doTransfer
 
-		;.nextFrame:
+		.nextFrame:
 			jsr NextFrame
 			jmp .loopNext
 

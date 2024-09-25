@@ -39,10 +39,10 @@ playerYHeightTable:
 ;     01-xx : une action peu avoir plusieurs metaSprite, c'est l'id du metaSprite (dataMetaSpriteXX)
 metaSpritesActionTable:
 	.dw metaSpritesActionStanding
-	.dw metaSpritesActionFiringWithStanding
 	.dw metaSpritesActionDISPO
+	.dw metaSpritesShoot4
 	.dw metaSpritesActionMovingSlowing
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionFiringWithStanding
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionMovingRun
 	.dw metaSpritesActionDISPO
@@ -68,10 +68,15 @@ metaSpritesActionStanding:
 	.db $00, $00
 
 metaSpritesActionFiringWithStanding:
+	.db $00, $09
+
 metaSpritesActionDISPO:
 
 metaSpritesActionMovingSlowing:
 	.db $22, $01, $01, $01
+
+metaSpritesShoot4:
+	.db $00, $0a
 
 metaSpritesActionMovingRun:
 	.db $16, $02, $03	
@@ -111,6 +116,8 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteLadderTop
 	.dw dataMetaSpriteHitGround
 	.dw dataMetaSpriteDeath1
+	.dw dataMetaSpriteStandingFire
+	.dw dataMetaSpritesShoot1
 
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
@@ -221,6 +228,24 @@ dataMetaSpriteDeath1:
 	.db $1e, $00
 	.db $1f, $00
 	.db $0d, $00
+
+dataMetaSpriteStandingFire:
+	.db $09 ; 9 sprite
+	.db $00 ;offsetLanding
+	.db $01, $00
+	.db $02, $00
+	.db $1d, $00 
+	.db $1e, $00 
+	.db $1f, $00 
+	.db $20, $00 
+	.db $21, $00 
+	.db $30, $00 
+	.db $31, $00
+
+dataMetaSpritesShoot1:
+	.db $01 ; 1 sprite
+	.db $00 ;offsetLanding
+	.db $0c, $00
 
 offsetTable:
 	.dw offsetStanding
