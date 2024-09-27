@@ -1375,11 +1375,11 @@ LaunchWeaponShot:
 		clc            
 		lda objectPosY            ; on ajout le y du perso
 		adc weaponFireData + 7, y 
-		lda objectPosY
 		cmp #$f8 ; si pas en dehors de l'écran
-		bne .setPosX
+		bne .setPos
 		lda #$f9
-	.setPosX:
+
+	.setPos:
 		sta objectPosY, x
 		lda objectPosX
 		plp ; restore direction perso
@@ -1416,7 +1416,7 @@ weaponFireData:
     .db $61,$00,$04,$00,$00,$00,$00,$EC,$00 ;f shield (?)
     .db $00,$00,$24,$00,$00,$00,$00,$F0,$10 ;guts debris
     .db $6C,$00,$15,$00,$03,$A0,$03,$F0,$10 ;guts block being carried(?)
-    .db $02,$00,$00,$00,$00,$00,$04,$00,$10 ;P
+    .db $02,$00,$00,$00,$00,$00,$04,$06,$10 ;P
 
 
 LadderInit:
@@ -4382,7 +4382,7 @@ DrawObject:
 	sta $0f ; Save pos Y du meta sprite
 	lda objectSpriteNum, x  ; L'id du sprite en cours
 	; Todo si objectSpriteNum = 0xff go end
-	lda objectFireDelay, x  ; Division par 16
+	lda objectFireDelay, x  ; Division par 16, (ajoute 1 au sprite actuel pour le changer)
 	lsr a                   ; Si action en cours on l'ajoute a l'objectSpriteNum
 	lsr a                  
 	lsr a
@@ -4416,7 +4416,7 @@ DrawObject:
 	.objetFireDelay:
 		lda objectFireDelay, x
 		beq .resetObjetFireDelay
-		and #$0f ; on garde que le MSB todo à voir pourquoi 
+		and #$0f ; on garde que le LSB todo à voir pourquoi 
 		dey
 		beq .resetObjetFireDelay
 		dec objectFireDelay, x

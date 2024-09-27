@@ -39,13 +39,13 @@ playerYHeightTable:
 ;     01-xx : une action peu avoir plusieurs metaSprite, c'est l'id du metaSprite (dataMetaSpriteXX)
 metaSpritesActionTable:
 	.dw metaSpritesActionStanding
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionFiringWithStanding
 	.dw metaSpritesShoot4
 	.dw metaSpritesActionMovingSlowing
 	.dw metaSpritesActionFiringWithStanding
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionMovingRun
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionFiringWithStanding
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionJump
 	.dw metaSpritesActionDISPO
@@ -65,10 +65,10 @@ metaSpritesActionTable:
 	.dw metaSpritesActionDeath
 
 metaSpritesActionStanding:
-	.db $00, $00
+	.db $a8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 
 metaSpritesActionFiringWithStanding:
-	.db $00, $09
+	.db $a8, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09
 
 metaSpritesActionDISPO:
 
@@ -234,9 +234,9 @@ dataMetaSpriteStandingFire:
 	.db $00 ;offsetLanding
 	.db $01, $00
 	.db $02, $00
-	.db $1d, $00 
-	.db $1e, $00 
-	.db $1f, $00 
+	.db $2d, $00 
+	.db $2e, $00 
+	.db $2f, $00 
 	.db $20, $00 
 	.db $21, $00 
 	.db $30, $00 
