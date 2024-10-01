@@ -39,16 +39,16 @@ playerYHeightTable:
 ;     01-xx : une action peu avoir plusieurs metaSprite, c'est l'id du metaSprite (dataMetaSpriteXX)
 metaSpritesActionTable:
 	.dw metaSpritesActionStanding
-	.dw metaSpritesActionFiringWithStanding
+	.dw metaSpritesActionStandingFiring
 	.dw metaSpritesShoot4
 	.dw metaSpritesActionMovingSlowing
-	.dw metaSpritesActionFiringWithStanding
+	.dw metaSpritesActionStandingFiring
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionMovingRun
-	.dw metaSpritesActionFiringWithStanding
+	.dw metaSpritesActionMovingRunFiring
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionJump
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionMovingRunFiring
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
@@ -60,14 +60,14 @@ metaSpritesActionTable:
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionLadder
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionStandingFiring
 	.dw metaSpritesActionLadderTop
 	.dw metaSpritesActionDeath
 
 metaSpritesActionStanding:
 	.db $a8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 
-metaSpritesActionFiringWithStanding:
+metaSpritesActionStandingFiring:
 	.db $a8, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09
 
 metaSpritesActionDISPO:
@@ -79,7 +79,10 @@ metaSpritesShoot4:
 	.db $00, $0a
 
 metaSpritesActionMovingRun:
-	.db $16, $02, $03	
+	.db $36, $02, $03, $02, $03	
+
+metaSpritesActionMovingRunFiring:
+	.db $36, $0b, $0c, $0b, $0c	
 
 metaSpritesActionLadder:
 	.db $16, $04, $05
@@ -118,6 +121,8 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteDeath1
 	.dw dataMetaSpriteStandingFire
 	.dw dataMetaSpritesShoot1
+	.dw dataMetaSpriteMovingRunFire1
+	.dw dataMetaSpriteMovingRunFire2
 
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
@@ -246,6 +251,34 @@ dataMetaSpritesShoot1:
 	.db $01 ; 1 sprite
 	.db $00 ;offsetLanding
 	.db $0c, $00
+
+dataMetaSpriteMovingRunFire1:
+	.db $08 ; 8 sprits
+	.db $01 ;offsetTable todo offsetMoving1
+	.db $03, $00
+	.db $04, $00
+	.db $2d, $00 
+	.db $16, $00 
+	.db $24, $00 
+	.db $25, $00
+	.db $00, $00 
+	.db $35, $00
+
+dataMetaSpriteMovingRunFire2:
+	.db $0c ; 12 sprites
+	.db $02 ;offsetTable todo offsetMoving2
+	.db $05, $00
+	.db $06, $00
+	.db $07, $00 
+	.db $2d, $00 
+	.db $2e, $00 
+	.db $19, $00 
+	.db $26, $00 
+	.db $27, $00 
+	.db $28, $00
+	.db $36, $00
+	.db $37, $00
+	.db $38, $00
 
 offsetTable:
 	.dw offsetStanding

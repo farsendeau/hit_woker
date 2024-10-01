@@ -1503,6 +1503,14 @@ LadderHandler:
 		bcs .release 
 		rts
 	.presseB:
+		lda joyPad
+		and #$c0 ; si on gauche est pressé
+		beq .weaponFire
+		jsr SetPlayerFacing
+	.weaponFire:
+		lda #$1f
+		sta objectFireDelay
+		jsr PlayerWeaponFire
 	.holdStill:
 		lda objectActionStateCounter
 		and #$f0
