@@ -1403,7 +1403,7 @@ LaunchWeaponShot:
 	rts 
 
 ; 0->ObjectSpriteNum (metaSpritesActionTable)
-; 1->ObjectUnknown440
+; 1->objectActionStateCounter
 ; 2->ObjectFlags
 ; 3->ObjectYSpeedFraction
 ; 4->ObjectYSpeed
@@ -4389,16 +4389,17 @@ DrawObject:
 	; Get config en fonction du meta sprite
 	sta $0f ; Save pos Y du meta sprite
 	lda objectSpriteNum, x  ; L'id du sprite en cours
-	; Todo si objectSpriteNum = 0xff go end
-	lda objectFireDelay, x  ; Division par 16, (ajoute 1 au sprite actuel pour le changer)
-	lsr a                   ; Si action en cours on l'ajoute a l'objectSpriteNum
-	lsr a                  
-	lsr a
-	lsr a
-	clc
-	adc objectSpriteNum, x
-	asl a                 
-	tay                    ; Iterator pour metaSpritesActionTable
+	;;cmp #$ff todo sprite enemi 
+	.adjustSprite:
+		lda objectFireDelay, x  ; Division par 16, (ajoute 1 au sprite actuel pour le changer)
+		lsr a                   ; Si action en cours on l'ajoute a l'objectSpriteNum
+		lsr a                  
+		lsr a
+		lsr a
+		clc
+		adc objectSpriteNum, x
+		asl a                 
+		tay                    ; Iterator pour metaSpritesActionTable
 
 	; metaSpriteActionXX
 	lda metaSpritesActionTable, y
@@ -4424,7 +4425,8 @@ DrawObject:
 	.objetFireDelay:
 		lda objectFireDelay, x
 		beq .resetObjetFireDelay
-		and #$0f ; on garde que le LSB todo à voir pourquoi 
+		and #$0f ; on garde que le LSB todo à voir pourquoi
+		tay
 		dey
 		beq .resetObjetFireDelay
 		dec objectFireDelay, x

@@ -60,7 +60,7 @@ metaSpritesActionTable:
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionLadder
-	.dw metaSpritesActionStandingFiring
+	.dw metaSpritesActionLadderFiring
 	.dw metaSpritesActionLadderTop
 	.dw metaSpritesActionDeath
 
@@ -86,6 +86,9 @@ metaSpritesActionMovingRunFiring:
 
 metaSpritesActionLadder:
 	.db $16, $04, $05
+
+metaSpritesActionLadderFiring:
+	.db $18, $0d, $0d
 
 metaSpritesActionLadderTop:
 	.db $00, $06, $06
@@ -123,6 +126,9 @@ dataMetaSpriteTable:
 	.dw dataMetaSpritesShoot1
 	.dw dataMetaSpriteMovingRunFire1
 	.dw dataMetaSpriteMovingRunFire2
+	.dw dataMetaSpriteLadderFire1
+	.dw dataMetaSpriteLadderFire2
+
 
 dataMetaSpriteStanding:
 	.db $09 ; 9 sprite
@@ -280,6 +286,30 @@ dataMetaSpriteMovingRunFire2:
 	.db $37, $00
 	.db $38, $00
 
+dataMetaSpriteLadderFire1:
+	.db $08 ; 8 sprites
+	.db $08 ;offsetLadderFire
+	.db $08, $40
+	.db $09, $40
+	.db $1a, $40 
+	.db $3b, $40 
+	.db $3c, $40  
+	.db $29, $40 
+	.db $2a, $40 
+	.db $3a, $40
+
+dataMetaSpriteLadderFire2:
+	.db $08 ; 8 sprites
+	.db $08 ;offsetLadderFire
+	.db $08, $40
+	.db $09, $40
+	.db $1a, $40 
+	.db $3b, $40 
+	.db $3c, $40  
+	.db $29, $40 
+	.db $2a, $40 
+	.db $3a, $40	
+
 offsetTable:
 	.dw offsetStanding
 	.dw offsetMovingSlowly ; et dataMetaSpriteMovingRun1
@@ -288,6 +318,8 @@ offsetTable:
 	.dw offsetLadder2
 	.dw offsetHitGround
 	.dw offsetDeath
+	.dw offsetLadder
+	.dw offsetLadderFire
 
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
@@ -299,7 +331,9 @@ offsetMovingSlowly
 offsetMovingRun2:
 	.db $09, $00, $01, $02, $03, $04, $0a, $05, $06, $0b, $07, $08
 offsetLadder:
-    .db $0c, $0d, $0e, $0f, $10, $11, $13 
+    .db $0c, $0d, $0e, $0f, $10, $11, $13
+offsetLadderFire:
+	.db $01, $00, $04, $03, $02, $06, $05, $07 
 offsetLadder2:
     .db $0d, $0c, $0f, $0e, $11, $10, $12
 offsetHitGround: 
