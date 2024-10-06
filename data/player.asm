@@ -258,26 +258,26 @@ dataMetaSpritesShoot1:
 	.db $0c, $00
 
 dataMetaSpriteMovingRunFire1:
-	.db $08 ; 8 sprits
-	.db $01 ;offsetTable todo offsetMoving1
-	.db $03, $00
-	.db $04, $00
+	.db $09 ; 09 sprites
+	.db $09 ;offsetTable todo offsetMoving1
+	.db $01, $00
+	.db $02, $00
 	.db $2d, $00 
-	.db $16, $00 
+	.db $2e, $00 
+	.db $2f, $00
 	.db $24, $00 
 	.db $25, $00
 	.db $00, $00 
 	.db $35, $00
 
 dataMetaSpriteMovingRunFire2:
-	.db $0c ; 12 sprites
-	.db $02 ;offsetTable todo offsetMoving2
-	.db $05, $00
-	.db $06, $00
-	.db $07, $00 
+	.db $0b ; 11 sprites
+	.db $0a ;offsetTable todo offsetMoving2
+	.db $01, $00
+	.db $02, $00
 	.db $2d, $00 
 	.db $2e, $00 
-	.db $19, $00 
+	.db $2f, $00
 	.db $26, $00 
 	.db $27, $00 
 	.db $28, $00
@@ -307,6 +307,8 @@ offsetTable:
 	.dw offsetDeath
 	.dw offsetLadder
 	.dw offsetLadderFire
+	.dw offsetRunningFire
+	.dw offsetRunningFire2
 
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
@@ -319,14 +321,18 @@ offsetMovingRun2:
 	.db $09, $00, $01, $02, $03, $04, $0a, $05, $06, $0b, $07, $08
 offsetLadder:
     .db $0c, $0d, $0e, $0f, $10, $11, $13
+offsetLadder2:
+    .db $0d, $0c, $0f, $0e, $11, $10, $12	
 offsetLadderFire:
 	.db $0d, $0c, $0f, $0e, $21, $11, $10, $12 
-offsetLadder2:
-    .db $0d, $0c, $0f, $0e, $11, $10, $12
 offsetHitGround: 
 	.db $17, $18, $19, $09, $00, $01, $02, $03, $04, $1a, $05, $1b
 offsetDeath:
 	.db $1c, $1d, $1e, $1f, $20
+offsetRunningFire:
+	.db $00, $01, $02, $03, $04, $05, $06, $07, $08
+offsetRunningFire2:
+	.db $00, $01, $02, $03, $04, $0a, $05, $06, $0b, $07, $08
 
 ;
 ; Décalage de pixel ; (pas pour ladder)
