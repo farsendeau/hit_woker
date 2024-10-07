@@ -35,7 +35,7 @@ playerYHeightTable:
 
 ;
 ; Pour metaSpritesActionXX
-;     00 : Frame avant changement de state (genre perso qui cligne des yeux)
+;     00 : msb nb metasprite, lsb nb frames av changement
 ;     01-xx : une action peu avoir plusieurs metaSprite, c'est l'id du metaSprite (dataMetaSpriteXX)
 metaSpritesActionTable:
 	.dw metaSpritesActionStanding
@@ -65,10 +65,10 @@ metaSpritesActionTable:
 	.dw metaSpritesActionDeath
 
 metaSpritesActionStanding:
-	.db $a8, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
+	.db $00, $00
 
 metaSpritesActionStandingFiring:
-	.db $a8, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09
+	.db $00, $09
 
 metaSpritesActionDISPO:
 
@@ -93,13 +93,11 @@ metaSpritesActionLadderFiring:
 metaSpritesActionLadderTop:
 	.db $00, $06, $06
 
-; sprite du run1
 metaSpritesActionJump:
 	.db $00, $02
 
-; sprite du run2
 metaSpritesActionHitGround:
-	.db $00, $07, $07 
+	.db $00, $07 
 
 metaSpritesActionDeath:
 	.db $00, $08

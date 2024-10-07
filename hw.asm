@@ -4215,7 +4215,8 @@ SpikeKill2:
 
 KillPlayer:
 	; TODO sound
-	
+	lda #$00
+	sta objectActionStateCounter
 	; Death anim
 	.initLoop:
 		lda #$05
