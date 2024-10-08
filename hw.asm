@@ -1067,8 +1067,6 @@ PlayerIA:
 	.makeRun:
 		lda #$06
 		sta objectSpriteNum
-		;lda #$00
-		;sta objectActionStateCounter
 
 	.makeRunningEnd:
 		lda #$00 ; standing
@@ -4226,11 +4224,10 @@ KillPlayer:
 			dec miscCounter
 			bne .loopMisCounter
 
-
 	lda objectSpriteNum
-	cmp #$18
+	cmp #$19
 	beq .next
-		lda #$18
+		lda #$19
 		sta objectSpriteNum
 		lda saveBank
 		jsr BankSwitch

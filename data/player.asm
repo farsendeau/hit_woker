@@ -62,13 +62,14 @@ metaSpritesActionTable:
 	.dw metaSpritesActionLadder
 	.dw metaSpritesActionLadderFiring
 	.dw metaSpritesActionLadderTop
+	.dw metaSpritesActionLadderFiring
 	.dw metaSpritesActionDeath
 
 metaSpritesActionStanding:
 	.db $00, $00
 
 metaSpritesActionStandingFiring:
-	.db $00, $09
+	.db $22, $09, $09, $09 
 
 metaSpritesActionDISPO:
 
