@@ -51,7 +51,7 @@ tileLadderState .rs 1 ; state pour l'échelle  (CurrentTileState)
 currentTuilesState .rs 3 ; state des tuiles du dessus et en dessous
 ladderPosX .rs 1
 
-scrollPosX      .rs 1
+scrollPosX      .rs 1 ; nb pixel de scrollin #$00 -> #$FF
 scrollPosScreen .rs 1 ; id de l'écran en cours
 scrollPosY      .rs 1
 screenMovedFlag .rs 1
@@ -85,9 +85,11 @@ bossBlinkState .rs 1
 
 activesLowerIndex .rs 1
 
+enemySpawned .rs 16
+
 var33 .rs 1 ; pour l'instant utilisé uniquement dans DrawBlocksScroll
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
-var7B .rs 1
+
 
   .rsset $0100
 stack .rs 256 ; stack
@@ -114,7 +116,7 @@ objectActionStateCounter .rs 32 ;440  compter changement d'état d'une action; O
 objectPosScreen      .rs 32 ; 460 ID écran ou se trouve l'object comment à 0
 objectCurrentScreen .rs 32 ; 480
 objectPosX          .rs 32 ; 4a0 Pos x de l'objet en px
-objectPosXfraction  .rs 32 ; 4c0
+objectPosXFraction  .rs 32 ; 4c0
 objectXSpeed        .rs 32 ; 4e0 
 objectXSpeedFraction .rs 32 ;500
 objectPosY          .rs 32  ;520
@@ -124,7 +126,7 @@ objectYSpeedFraction .rs 32 ; 580
 objectYSpeed        .rs 32 ; 5a0
 objectLifeCycleCounter .rs 32 ;5c0
 objectLifeMeter     .rs 32 ; 5e0
-ObjectType          .rs 32 ; ennemi ID ; 600
+objectType          .rs 32 ; enemi ID ; 600
 
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
@@ -324,8 +326,33 @@ textSkit13:
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$10,$09,$05,$12,$12,$05,$ff
 	.db $10,$09,$05,$12,$12,$05,$00,$10,$01,$0c,$0d,$01,$04,$05,$00,$00,$00,$00,$10,$09,$05,$12,$12,$05, $fe
 
+
+	
   .bank 11		;05
   .org $A000
+
+; $00 id screen
+; $01 x pos
+; $02 y pos
+; $03 id type
+enemyDataTable:
+	.dw enemyDataLvl00
+	.dw enemyDataLvl01
+
+enemyDataLvl00:
+enemyDataLvl01:
+	.db $01, $10, $4c, $00
+
+; voir info.txt
+defaultEnemyFlags:
+	.db $06
+
+defaultEnemySpeedTable:
+	.db $00
+
+;DefaultObjectFireDelay
+defaultEnemyFireDelay:
+	.db $00
 
 ;-----------BANK 6------------------------------------------------------------------
 
@@ -657,8 +684,10 @@ MainLoop:
 	; todo gestion du run
 
 	jsr RunBossIA
+	jsr RunCollisionChecks ; /!\ jusqu'a LoadEnemies $00 n'est plus settable
 	;jsr RunWeaponIA
 	jsr RunObjectIA
+	jsr LoadEnemies ; ok pour set $00 
 	jsr UpdateGraphics
 
 	; scrolling vertical
@@ -669,6 +698,15 @@ MainLoop:
 		jsr NextFrame
 		JMP MainLoop
 
+RunCollisionChecks:
+	sec
+	lda objectPosX
+	sbc scrollPosX
+	sec
+	sbc #$07
+	sta $00
+
+	rts
 
 ; A = currentStripeEndType (0=right 1=up 2=left 3=down)  
 CheckStripeEnding:
@@ -1359,7 +1397,7 @@ LaunchWeaponShot:
 		lda #$00
 		sta objectLifeCycleCounter, x
 		sta objectFireDelay, x
-		sta objectPosXfraction, x
+		sta objectPosXFraction, x
 		sta objectPosYFraction, x
 
 		lda weaponFireData + 3, y ; y speed fraction
@@ -1578,7 +1616,7 @@ ObjectRelocateHorizontally:
 	sta objectPosScreen, x
 
 	lda tmpPosXFraction ; tmp objectPosXFraction
-	sta objectPosXfraction, x
+	sta objectPosXFraction, x
 
 	lda tmpPosX ; tmp ObjectPosX
 	sta objectPosX, x
@@ -1774,7 +1812,7 @@ ScrollingLeft:
 	stx tsaPPUtransferSize
 	stx $0d ; utilisé dans DrawBlockFromActiveLevelMap pour l'offset tsaPPuTransfer
 
-	lda $04 ; save ObjectPosXfraction
+	lda $04 ; save objectPosXFraction
 	pha
 	lda $05 ; save  ObjectPosX
 	pha
@@ -1791,7 +1829,7 @@ ScrollingLeft:
 	pla 
 	sta $05 ; restore ObjectPosX
 	pla
-	sta $04 ; restore ObjectPosXfraction
+	sta $04 ; restore objectPosXFraction
 
 	rts
 
@@ -1805,7 +1843,7 @@ ScrollingRight:
 	stx tsaPPUtransferSize
 	stx $0d ; utilisé dans DrawBlockFromActiveLevelMap pour l'offset tsaPPuTransfer
 	
-	lda $04 ; save ObjectPosXfraction
+	lda $04 ; save objectPosXFraction
 	pha
 	lda $05 ; save  ObjectPosX
 	pha
@@ -1839,7 +1877,7 @@ ScrollingRight:
 		pla 
 		sta $05 ; restore ObjectPosX
 		pla
-		sta $04 ; restore ObjectPosXfraction
+		sta $04 ; restore objectPosXFraction
 		
 		rts
 
@@ -1892,9 +1930,9 @@ HorizontalScrollPoint:
 	ldy horizNumberOfFramesToScroll, x
 	.loop:
 		clc
-		lda objectPosXfraction
+		lda objectPosXFraction
 		adc $10
-		sta objectPosXfraction
+		sta objectPosXFraction
 		lda objectPosX
 		adc $11
 		sta objectPosX
@@ -1933,7 +1971,7 @@ HorizontalScrollPoint:
 ; backward Scrolling, player X increment
 horizontalScrollIncrementTable: 
 	.db $01, $FF
-; Scrolling, increments ObjectPosXfraction
+; Scrolling, increments objectPosXFraction
 horizontalScrollPosXFractionTable: 
 	.db $B0, $50  
 ; forward scrolling, player X increment
@@ -2058,11 +2096,11 @@ ObjectStandStillRight:
 
 ObjectUpdateMovementRight:
 	ldx objectId ; objet ID
-	; ObjectPosXfraction
+	; objectPosXFraction
 	clc
-	lda objectPosXfraction, x
+	lda objectPosXFraction, x
 	adc objectXSpeedFraction, x
-	sta tmpPosXFraction; tmp ObjectPosXFraction 
+	sta tmpPosXFraction; tmp objectPosXFraction 
 	; ObjectPosX
 	lda objectPosX, x
 	adc objectXSpeed, x ; posX + Xspeed
@@ -2143,11 +2181,11 @@ ObjectUpdateMovementRight:
 
 ObjectUpdateMovementLeft:
 	ldx objectId ; objet ID
-	; ObjectPosXfraction
+	; objectPosXFraction
 	sec
-	lda objectPosXfraction, x
+	lda objectPosXFraction, x
 	sbc objectXSpeedFraction, x
-	sta tmpPosXFraction; tmp ObjectPosXFraction 
+	sta tmpPosXFraction; tmp objectPosXFraction 
 	; ObjectPosX
 	lda objectPosX, x
 	sbc objectXSpeed, x ; posX - Xspeed
@@ -2614,7 +2652,7 @@ ForgetRoomObjects:
 	LDX #$0f
 	LDA #$ff
 	.loop2:
-		sta var7B, x
+		sta enemySpawned, x
 		dex
 		bpl .loop2
 
@@ -2654,6 +2692,9 @@ objectXWidthTable
 	.db $08, $08, $08, $08 ;
 	.db $08, $08, $08, $06 ;10
 
+;;;;;; Enemi DATA SPRITE ;;;;;
+  .include "data/enemy.asm"
+
 ;;;;;; Player DATA SPRITE ;;;;;
   .include "data/player.asm"
 
@@ -2681,7 +2722,7 @@ RESET:
 	lda #06
 	sta PPUMASK    ; disable rendering
 	
-	lda #12       ; charge bank 12
+	lda #12       ; charge bank 6
 	jsr BankSwitch
 	jmp Reset2
 
@@ -2731,6 +2772,204 @@ BankSwitchStage:
 	
 	rts
 	
+LoadEnemies:
+	lda bossCurrentStrategy ; pas d'enemi si boss
+	beq .notBoss
+	.return:
+		rts
+	.notBoss:
+
+	; charge direct banque 5 data logique game
+	lda #10
+	sta currentBank
+	lsr a
+	sta $c005
+
+	; todo zigZagFireStatus
+	; todo spawn enemi après mort
+
+	lda screenMovedFlag
+	and #$01 ; #$01 un enemi peut être loadé
+	beq .return ; #00 c'est qu'il n'y à rien à load = return 
+	lda screenMovedFlag ; direction  $41 droite $40 gauche
+	and #$fe
+	bne LoadEnemiesForward
+	jmp LoadEnemiesBackward
+
+	rts
+
+; charge les enemis vers l'avant
+LoadEnemiesForward:
+	; ex: le perso se trouve sur le premier écran id = 0 
+	;     et l'enemi à charger écran 1
+	;     si scrollPosX -1 donne < 0 ou > 255 on set carry
+	;     alors adc à scrollPosScreen sera 1
+
+	clc 
+	lda scrollPosX ; pixel du scrolling
+	adc #$ff       ; + #$ff pour faire -1
+	sta $04
+
+	lda scrollPosScreen ; id de l'écran
+	adc #$00            ; on ajoute carry
+	sta $05             ; screen du player
+
+	lda currentEnemyIndex
+	jsr LoadEnemyNumber
+	;ldy #$00
+	.loop:
+		lda [currentRoomPointer], y ; id écran
+		cmp $05
+		bcc .setValue; id écran < perso écran 
+		bne .checkFoBackward ; <> go check si l'enemi n'est pas avant
+		iny ; ici id écran = perso écran
+		lda [currentRoomPointer], y ; pos X
+		dey ; dey car on a iny pour le check de pos X
+		cmp $04 ; scroolPosx -1 du perso
+		beq .setValue ; =
+		bcs .checkFoBackward ; <
+
+		.setValue:
+			; enemi X pos sur SON écran
+			iny
+			lda [currentRoomPointer], y 
+			sta $00 ; /!\ $00 sera verouiller, voir mainLoop
+			; Enemi Y pos sur son écran
+			iny
+			lda [currentRoomPointer], Y
+			sta $01
+			; Enemi id
+			iny
+			lda [currentRoomPointer], y
+			
+			iny
+			ldx currentEnemyIndex
+			jsr SpawnEnemy
+			inc currentEnemyIndex
+			bne .loop
+
+	.checkFoBackward:
+
+	lda saveBank
+	jsr BankSwitch
+
+	rts
+; Charge les enemis vers l'arrière
+LoadEnemiesBackward:
+	lda saveBank
+	jsr BankSwitch
+
+	rts
+	
+LoadEnemyNumber:
+	ldx $00 ; playerX - 7px
+	stx currentRoomPointer+1  ;*16
+	asl a
+	rol currentRoomPointer+1
+	asl a
+	rol currentRoomPointer+1
+	sta currentRoomPointer
+	lda stageId ; id pour enemyDataTable
+	asl a ; id word
+	tax
+	clc
+	lda enemyDataTable, x
+	adc currentRoomPointer
+	sta currentRoomPointer
+	lda currentRoomPointer+1
+	and #$03
+	adc enemyDataTable+1, x
+	sta currentRoomPointer+1
+	ldy #$00
+
+	rts
+
+
+; Spawn a new object
+;  A = object type
+;  Y = save y (enemyDataTable[y])
+;  X = currentEnemyIndex
+;  $00 = object pos x
+;  $01 = object pos y
+;  $05 = object screen number
+; SpawnObject
+SpawnEnemy:
+	sta $02 ; Enemi id
+	sty $03 ; save y
+	;cmp #$ff
+	;bne
+	stx $06 ; $0c save currentEnemyIndex
+	lda $01 ; pos Y
+	txa
+	ldx #$0f
+	; cherche si l'enemi est déjà affiché
+	.loop:
+		cmp enemySpawned, x
+		beq .spawned
+		dex
+		bpl .loop
+		bmi .notFound
+	.spawned:
+		ldy $03
+		rts
+	.notFound:
+		ldx #$10
+		jsr FindFreeObject
+		bcs .loop
+		; set Enemi:	
+		lda $06 ; $0c restore currentEnemyIndex
+		sta enemySpawned, x
+		lda #$ff
+		sta objectSpriteNum, x
+		lda $02 ; enemi id
+		sta objectType, x
+		lda $05 ; écran id
+		sta objectPosScreen, x 
+		lda $00 ; pos x
+		sta objectPosX, x
+		lda $01 ; pox y
+		; cmp #$ff
+		sta objectPosY, x
+		ldy $02 ; enemi id
+		lda defaultEnemyFlags, y
+		sta objectFlags, x
+		tya
+		pha ; save enemi id
+		lda defaultEnemySpeedTable, y
+		tay 
+		jsr InitEnemyDefaultSpeed
+		pla ; restore enemi id
+		tya
+		lda defaultEnemyFireDelay, y
+		sta objectFireDelay, x
+		lda #$14 
+		sta objectLifeMeter
+
+		lda #$00
+		sta objectActionStateCounter, x
+		sta objectLifeCycleCounter, x
+		sta objectPosYFraction, x
+		sta objectPosXFraction, x
+		; todo ajouter liste de sons
+		
+		ldy $03 ; restore y
+	rts
+
+FindFreeObject:
+	lda #$F8
+	.loop:
+		cmp objectPosY, x 
+		beq .objectFree
+		inx
+		cpx totalObjects
+		bne .loop
+		.noObjectFree:
+			sec
+			rts
+		.objectFree:
+			clc
+	rts
+
 ;
 ; Set ObjectXSpeedFraction et ObjectXSpeed
 ; 
@@ -4387,7 +4626,9 @@ DrawObject:
 	; Get config en fonction du meta sprite
 	sta $0f ; Save pos Y du meta sprite
 	lda objectSpriteNum, x  ; L'id du sprite en cours
-	;;cmp #$ff todo sprite enemi 
+	cmp #$ff ;sprite enemi 
+	bne .adjustSprite
+	jmp DrawEnemy
 	.adjustSprite:
 		lda objectFireDelay, x  ; Division par 16, (ajoute 1 au sprite actuel pour le changer)
 		lsr a                   ; Si action en cours on l'ajoute a l'objectSpriteNum
@@ -4444,7 +4685,7 @@ DrawObject:
 		sta $00
 		lda dataMetaSpriteTable+1, y
 		sta $01
-
+DrawObjectSet:
 		ldy #$00 ; reset y
 		sty $09 ; save iterator dataSprite
 
@@ -4558,6 +4799,55 @@ DrawObject:
 		stx $0d ; counterSprite
 	.end:
 		rts
+
+DrawEnemy:
+	lda objectFlags, x
+	and #$20 ; si invisible
+	beq .next
+	rts
+	.next:
+
+	lda objectType, x
+	asl a
+	tay
+
+	; metaEnemySpritesTable 
+	lda metaEnemySpritesTable, y
+	sta $00
+	lda metaEnemySpritesTable+1, y
+	sta $01
+
+	lda objectActionStateCounter, x
+	lsr a ;*16
+	lsr a
+	lsr a
+	lsr a 
+	tay 
+	iny
+
+	; Counter de chagement de state
+	lda [$00], y
+	pha
+	
+	lda objectLifeCycleCounter, x
+	beq .updateActionStateCounter
+	jmp .dontUpdateActionStateCounter
+	.updateActionStateCounter:
+		jsr UpdateObjectActionStateCounter
+	.dontUpdateActionStateCounter:
+
+	pla
+	asl a
+	tay
+
+	lda dataMetaSpriteEnemyTable, y
+	sta $00
+	lda dataMetaSpriteEnemyTable+1, y
+	sta $01
+	jmp DrawObjectSet
+
+
+	rts
 
 ;
 ; $00
@@ -4847,7 +5137,26 @@ NMI:
 ;-------------------	
   .bank 15		;07 (2/2 last bank/fixed)
   .org $E000
-	
+
+;InitObjectDefaultSpeed
+InitEnemyDefaultSpeed:
+	lda defaultEnemySpeed, y
+	sta objectYSpeedFraction
+	lda defaultEnemySpeed+1, y
+	sta objectYSpeed
+	lda defaultEnemySpeed+2, y
+	sta objectXSpeedFraction
+	lda defaultEnemySpeed+3, y
+	sta objectXSpeed
+	lda defaultEnemySpeed+4, y
+
+	rts
+
+; YSpeedFraction, YSpeed, XSpeedFraction and XSpeed
+defaultEnemySpeed:
+    .db $E0,$04,$30,$01 ;00 enemi
+
+
 ; Interupt
   .org $FFFA     ;first of the three vectors starts here
   .dw NMI        ;when an NMI happens (once per frame if enabled) the 
