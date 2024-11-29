@@ -15,7 +15,7 @@
   .rsset $0000
 echo .rs 1
 pointer .rs 19
-
+;20
 PPU2000value .rs 1
 PPU2001Value .rs 1
 
@@ -35,6 +35,7 @@ frameCounter .rs 1
 miscCounter .rs 1
 nmiGfxUpdateDone .rs 1 ; update de la nmi ok
 paletteUpdateDelay .rs 1
+;20
 paletteParam .rs 1
 palettePtr .rs 4
 ppuTransferRawSize .rs 1
@@ -49,6 +50,7 @@ currentStripeEndType .rs 1 ;0=right 1=up 2=left 3=down
 
 tileLadderState .rs 1 ; state pour l'échelle  (CurrentTileState)
 currentTuilesState .rs 3 ; state des tuiles du dessus et en dessous
+;20
 ladderPosX .rs 1
 
 scrollPosX      .rs 1 ; nb pixel de scrollin #$00 -> #$FF
@@ -90,6 +92,8 @@ enemySpawned .rs 16
 var33 .rs 1 ; pour l'instant utilisé uniquement dans DrawBlocksScroll
 varBF .rs 1 ; todo je ne sais pas à quoi ça sert
 
+randomNumber .rs 1
+randomSeed .rs 1
 
   .rsset $0100
 stack .rs 256 ; stack
@@ -126,7 +130,7 @@ objectYSpeedFraction .rs 32 ; 580
 objectYSpeed        .rs 32 ; 5a0
 objectLifeCycleCounter .rs 32 ;5c0
 objectLifeMeter     .rs 32 ; 5e0
-objectType          .rs 32 ; enemi ID ; 600
+objectType          .rs 32 ; ennemi ID ; 600 (610 ennemi)
 
 ppuTransferRawAddr .rs 2
 ppuTransferRawBuf .rs 126 
@@ -341,8 +345,10 @@ enemyDataTable:
 
 enemyDataLvl00:
 enemyDataLvl01:
-	.db $01, $10, $4c, $00
-
+	.db $01, $10, $Ac, $00 ; crackBoy écran 2
+	.db $03, $10, $Ac, $00 ; crackBoy écran 4
+	.db $15, $10, $8c, $00 ; crackBoy écran 19
+	.db $17, $10, $Ac, $00 ; crackBoy écran 19
 ; voir info.txt
 defaultEnemyFlags:
 	.db $06
@@ -685,7 +691,7 @@ MainLoop:
 
 	jsr RunBossIA
 	jsr RunCollisionChecks ; /!\ jusqu'a LoadEnemies $00 n'est plus settable
-	;jsr RunWeaponIA
+	jsr RunWeaponIA
 	jsr RunObjectIA
 	jsr LoadEnemies ; ok pour set $00 
 	jsr UpdateGraphics
@@ -802,7 +808,7 @@ ScrollPreviousRoom:
 ; Scrolling écran suivant
 ScrollNextRoom:
 	; todo supprimer object de la room courrante
-	;jsr  ForgetRoomObjects
+	jsr ForgetRoomObjects
 	ldx currentEndScreen ; ID écran 
 	inx ; up de la currentEndScreen
 	txa
@@ -882,8 +888,6 @@ shutter2Table: ;right, up, left, down. down=up, up=down
 shutterTable:
     ; shutter=right, up=up, shutter=left, down=down
     .db $20, $80, $20, $40, $00
-
-
 
 PlayerIA:
 	ldx #$00
@@ -1150,6 +1154,7 @@ BossIABegin:
 	rts
 
 ; /!\ doit être suivi de ObjectShouldBeDestroyed ne pas déplacer /!\
+; RunEnemyAI
 RunObjectIA:
 	ldx #$02     ; on commence par les shoots
 	stx objectId
@@ -1163,14 +1168,30 @@ RunObjectIA:
 			lda objectSpriteNum, x
 			cmp #$ff
 			bne .shoot
-			; todo ici DoEnemyIA
-			; jmp .nextObject
+			jsr DoEnemyIA
+			jmp RunObjectIA_nextObject
 		.shoot:
 			lda objectLifeCycleCounter, x ; object actif ?
 			bne .checkIfOutScreen ; non
-			            ; oui
-			; todo plein de truc
+			lda objectFlags, x
+			and #$80
+			beq .checkAnimation
+			lda #$05
+			jmp ObjectShouldBeDestroyed
+
+		.checkAnimation:
+			lda objectFlags, x ; si object a de base des animations ?
+			and #$08
+			beq .updateMouvementRight ; non
+			lda objectActionStateCounter, x ; Est qu'il lui en reste ?
+			bne .updateMouvementRight; oui
+			lda #$00 ; non
+			jmp ObjectShouldBeDestroyed
+		; Update position
 		.updateMouvementRight:
+			lda #$00 ; reset check des tuiles
+			sta currentTuilesState
+			sta currentTuilesState+1
 			lda objectFlags, x
 			and #$40
 			beq .updateMouvementLeft
@@ -1179,18 +1200,42 @@ RunObjectIA:
 		.updateMouvementLeft:
 			jsr ObjectUpdateMovementLeft
 		.relocateHorizontally:
-			jsr ObjectRelocateHorizontally	
+			jsr ObjectRelocateHorizontally
+		; Check si position
 		.checkIfOutScreen:
 			sec
 			lda objectPosX, X
 			sbc scrollPosX
 			lda objectPosScreen, x
 			sbc scrollPosScreen
-			beq .checkDestroy ; si pas > 0 c'est out of screen
+			beq .checkLifeCycle ; si pas > 0 c'est out of screen
 			lda #$01
 			jmp ObjectShouldBeDestroyed
-		.checkDestroy:
-			; jmp ObjectShouldBeDestroyed
+		; check LifeCycle	
+		.checkLifeCycle:
+			lda objectLifeCycleCounter, x ; y'a encore des cycle ?
+			bne RunObjectIA_nextObject ; oui
+			lda currentTuilesState ; non alors collision ?
+			beq .checkCollisionAndTimer ; non ?
+			lda #$03
+			jmp ObjectShouldBeDestroyed
+		.checkCollisionAndTimer:
+			lda objectFlags, X ; peut rentré en collision avec bg ou objet timer
+			and #$11
+			bne .checkCollisionBackground
+			jsr ObjectCheckIfOutScreenVertically
+			bcs .destroy ; est en dehors de l'écran
+			lda $00
+			sta objectPosYFraction, x
+			lda $01
+			sta objectPosY, x
+			bcc RunObjectIA_nextObject
+		.checkCollisionBackground:
+			lda currentTuilesState+1
+			beq RunObjectIA_nextObject
+		.destroy:
+			lda #$04
+			jmp ObjectShouldBeDestroyed
 	RunObjectIA_nextObject:
 		inc objectId ; on passe à l'objet suivant
 		lda totalObjects
@@ -1200,6 +1245,337 @@ RunObjectIA:
 
 	.end:
 
+	rts
+
+; DoEnemyAI
+DoEnemyIA:
+	lda objectType, x
+	asl a
+	tay
+	lda enemyIATable, y
+	sta $04
+	lda enemyIATable+1, y
+	sta $05
+	jmp [$04]
+
+enemyIATable:
+	.dw EnemyIACrackBoy ; 00
+	.dw EnemyIADispo ;01
+	.dw EnemyIADispo ;02
+	.dw EnemyIADispo ;03
+	.dw EnemyIADispo ;04
+	.dw EnemyIADispo ;05
+	.dw EnemyIADispo ;06
+	.dw EnemyIADispo ;07
+	.dw EnemyIADispo ;08
+	.dw EnemyIADispo ;09
+	.dw EnemyIADispo ;0a
+	.dw EnemyIADispo ;0b
+	.dw EnemyIADispo ;0c
+	.dw EnemyIADispo ;0d
+	.dw EnemyIADispo ;0e
+	.dw EnemyIADispo ;0f
+	.dw EnemyIADispo ;10
+	.dw EnemyIADispo ;11
+	.dw EnemyIADispo ;12
+	.dw EnemyIADispo ;13
+	.dw EnemyIADispo ;14
+	.dw EnemyIADispo ;15
+	.dw EnemyIADispo ;16
+	.dw EnemyIADispo ;17
+	.dw EnemyIADispo ;18
+	.dw EnemyIADispo ;19
+	.dw EnemyIADispo ;1a
+	.dw EnemyIADKilling ;1b
+	.dw EnemyIADispo ;1c
+	.dw EnemyIADispo ;1d
+	.dw EnemyIADispo ;1e
+	.dw EnemyIADispo ;1f
+	.dw EnemyIADispo ;20
+	.dw EnemyIADispo ;21
+	.dw EnemyIADispo ;22
+	.dw EnemyIADispo ;23
+	.dw EnemyIADispo ;24
+	.dw EnemyIADispo ;25
+	.dw EnemyIADispo ;26
+	.dw EnemyIADispo ;27
+	.dw EnemyIADispo ;28
+	.dw EnemyIADispo ;29
+	.dw EnemyIADispo ;2a
+	.dw EnemyIADispo ;2b
+	.dw EnemyIADispo ;2c
+	.dw EnemyIADispo ;2d
+	.dw EnemyIADispo ;2e
+	.dw EnemyIADispo ;2f
+	.dw EnemyIADispo ;30
+	.dw EnemyIADispo ;31
+	.dw EnemyIADispo ;32
+	.dw EnemyIADispo ;33
+	.dw EnemyIADispo ;34
+	.dw EnemyIADispo ;35
+	.dw EnemyIADispo ;36
+	.dw EnemyIADispo ;37
+	.dw EnemyIADispo ;38
+	.dw EnemyIADispo ;39
+	.dw EnemyIADispo ;3a
+	.dw EnemyIADispo ;3b
+
+	.dw EnemyIABonus ;3c bonus B
+	.dw EnemyIABonus ;3d bonus C
+	.dw EnemyIABonus ;3e bonus D
+	.dw EnemyIABonus ;3f small life
+	.dw EnemyIABonus ;40 large life
+	.dw EnemyIABonus ;41 1up
+
+EnemyIADispo:
+	rts
+
+EnemyIABonus:
+	lda objectFlags, x
+	and #$10 ; si timer ?
+	beq EnemyIAGeneric
+	inc objectFireDelay, x ; inc du timer
+	lda objectFireDelay, x
+	cmp #$f0               ; si timer < 240
+	bne EnemyIAGeneric ; non
+	jmp RemoveObject   ; oui
+
+EnemyIAGeneric:
+	jsr EnemyIAMovementsAndDamageCheck
+	rts
+
+EnemyIADKilling:
+	lda objectActionStateCounter, x
+	bne EnemyIAGeneric
+	jmp RemoveObject
+
+EnemyIACrackBoy:
+	;jsr EnemySearchPlayer
+	;cmp #$28
+	;bcc .next
+	;	jmp .moveAndDamage
+	;.next:
+
+	;lda objectXSpeedFraction, x
+	;adc #$01
+	;sta objectXSpeedFraction, x
+	;lda objectXSpeed, x
+	;adc #$00 ; add carry
+	;sta objectXSpeed, x
+	ldy #$00
+	lda objectFlags, X
+	and #$40
+	bne .checkCollision
+	ldy #$02
+	
+	.checkCollision:
+		lda objectPosY, x
+		sta $03
+
+		clc
+		lda objectPosX, x
+		adc crackBoyCollisionTestTable+1, y
+		sta $0a
+
+		lda objectPosScreen, x
+		adc crackBoyCollisionTestTable+0, y
+		sta $02
+		
+		TXA
+		pha
+		jsr DoCollisionCheckFor
+		pla
+		tax
+		lda currentTuilesState+1
+		beq .moveAndDamage
+		
+		lda objectFlags, x
+		EOR #$40
+		sta objectFlags,x 
+		
+	.moveAndDamage:
+		jsr EnemyIAMovementsAndDamageCheck
+
+	rts
+
+;crackBoyPosXTable:
+	;.db $01, $ff, $ff
+
+crackBoyCollisionTestTable:
+	.db $00,$08 ; +16
+    .db $ff,$F0 ; -16
+
+;EnemyAI_MovementsAndDamageCheck
+EnemyIAMovementsAndDamageCheck:
+	ldx objectId
+
+	lda #$00
+	sta currentTuilesState
+	sta currentTuilesState+1
+
+	lda objectFlags, X ; object touché ?
+	and #$80
+	beq .checkLifeCycleCounter
+		jsr IAObjectHit ; AI_objectHit
+		; rts ;; Todo à supprimer une fois IAObjectHit finalisé
+	.checkLifeCycleCounter:
+		lda objectLifeCycleCounter, X
+		bne .checkIfInScreen
+
+	lda objectFlags, x
+	and #$40
+	beq .left
+	;.right:
+		jsr ObjectUpdateMovementRight
+		jmp .relocate
+	.left:
+		jsr ObjectUpdateMovementLeft
+	.relocate:
+		jsr ObjectRelocateHorizontally
+
+	.checkIfInScreen:
+		sec
+		lda objectPosX, x
+		sbc scrollPosX
+		lda objectPosScreen, x
+		sbc scrollPosScreen
+		beq .endRemove
+			jmp RemoveObject
+		.endRemove:
+
+	lda objectLifeCycleCounter, x
+	bne .end
+
+	lda objectFlags, x ; si timer ou collision avec bg
+	and #$11
+	bne .checkCollisionWalls
+	jsr ObjectCheckIfOutScreenVertically
+	bcs .removeObject
+	lda $00
+	sta objectPosYFraction, x
+	lda $01
+	sta objectPosY, x
+	bcc .end
+	.checkCollisionWalls:
+		jsr ObjectDoCollisionChecksAndAvoidWalls
+		lda currentTuilesState+1
+		cmp #$ff
+		bne .end 
+	.removeObject:
+		jmp RemoveObject	
+	.end:
+		clc
+		rts
+
+; AI_ObjectHit
+; /!\ Doit être suivi par EnemyKilled
+IAObjectHit:
+
+	; Select weapon
+	lda weaponSelect
+	asl a ; table de words
+	tay
+	lda weaponDamageTable, y
+	sta $04
+	lda weaponDamageTable+1, Y
+	sta $05
+	ldy objectType, x
+
+	; Diminue vie ennemi
+	sec
+	lda objectLifeMeter, x
+	sbc [$04], y
+	bcc EnemyKilled 
+	BEQ EnemyKilled
+	sta objectLifeMeter,x
+
+	lda #$01
+	rts
+
+weaponDamageTable:
+	.dw WeaponDamageA
+
+
+
+;/!\ Doit être précédé de IAObjectHit
+; Y weaponID
+; X enemyID
+EnemyKilled:
+	lda objectType, x 
+	pha  ; save du type de l'ennemi tué
+	
+	lda #$1b ; creation object Type explosion
+	sta objectType, x
+
+	lda #$ff
+	sta enemySpawned, x
+	jsr ClearObjectMem
+
+	sta objectActionStateCounter, x
+	sta objectFireDelay, x
+	sta objectFlags, x
+	sta objectLifeCycleCounter, x
+
+	pla
+	; random item
+	lda #$64
+	jsr RandomGenerator
+
+	ldy #$3b
+	ldx #$05
+	.loop:
+		cmp bonusProbabilityTable, x
+		bcc .endLoop
+		iny
+		dex
+		bpl .loop
+	.endLoop:
+	
+	cpy #$3b ; si pas de proba pas de bonus
+	beq .end
+	; Spawn le bonus
+	tya 
+	jsr CreateEnemy
+	bcs .end
+	lda #$13 ; timer + collision bg + collision player
+	sta objectFlags, x
+	ldy #$1c
+	jsr InitEnemyDefaultSpeed
+	.end:
+		ldx objectId
+		lda #$00
+		rts
+
+bonusProbabilityTable:
+	.db 99, 97, 95, 80, 65, 12
+
+; A = max valeur
+RandomGenerator:
+	sta randomNumber
+	lda randomSeed
+	sec
+	.loop:
+		sbc randomNumber
+		bcs .loop
+	adc randomNumber 
+	rts 
+
+ClearObjectMem:
+	lda #$00
+	sta objectYSpeedFraction, x
+	sta objectYSpeed, x
+	sta objectXSpeedFraction, x
+	sta objectXSpeed, x
+	rts
+
+RemoveObject:
+	ldx objectId
+	lda #$f8
+	sta objectPosY, x
+	;cpx #$10 ; pour les enemis sans vie (ou object enemi)
+	lda #$ff
+	sta enemySpawned, x
+	sec 
 	rts
 
 ; /!\ doit suivre RunObjectIA ne pas déplacer /!\
@@ -1288,13 +1664,30 @@ Sprite27ShouldBeDestroyedAndDefault:
 	jmp Sprite19ShouldBeDestroyedAndDefault
 
 RunWeaponIA:
+	lda frameCounter
+	and #$01
+	clc
+	adc #$10
+	tax 
+	; pour les frames paires   objets 10 12 14 16 18 1a 1c 1e
+	; pour les frames impaires objets 11 13 15 17 19 1b 1d 1f
+	; on met l'objet non touché
+	.loop:
+		lda objectFlags, X
+		and #$7f
+		sta objectFlags, x
+		inx ; 2x inx car 1 frame/2 object paire/impaire
+		inx
+		cpx #$20
+		bcc .loop
+	
 	; todo check object colision
 	lda weaponSelect
 	asl A
 	tay
 	lda weaponIATable, y
 	sta $00
-	lda weaponIATable, y
+	lda weaponIATable+1, y
 	sta $01
 	jmp [$00]
 
@@ -1308,9 +1701,18 @@ weaponIAA:
 	; got WeaponIATestShotHit
 	; /!\ ne pas bouger /!\
 
-; A = id objet max (ex pour A c'est 5 car id min 2 + 3 shoot en même temps)
+; A = id objet max (ex pour l'arme A c'est 5 car id min 2 + 3 shoot en même temps)
 ; X = id objet mini (ex pour A 2)
 WeaponIATestShotHit:
+	sta $0f ; Max weapon $59 voir pour variablisier
+	.loop:
+		stx objectId
+		jsr TestShotHit
+		ldx objectId
+		inx 
+		cpx $0f ;$59 l'id weapon == max weapon ?
+		bne .loop
+
 	rts
 
 weaponIAB:
@@ -1648,7 +2050,8 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		cpy #$ff
 		bne .playerHeight
 	.enenmyHeight:
-		; TODO
+		lda objectYHeightTable1, y
+		bne .handleHeight
 	.playerHeight:
 		lda playerYHeightTable, y
 	.handleHeight:
@@ -2112,7 +2515,7 @@ ObjectUpdateMovementRight:
 	ldx objectId
 	beq .player ; si player
 
-	.object:
+	;.object:
 		sta tmpPosScreen
 		sty tmpPosX
 		lda objectFlags, x
@@ -2145,8 +2548,11 @@ ObjectUpdateMovementRight:
 		ldy objectSpriteNum, x
 		cpy #$ff
 		bne .widthTablePlayer
-	; widthTableEnemy
-	;  TODO
+
+	; widthTableEnemy:
+		ldy objectType, x
+		lda objectXWidthTable1, y
+		bne .setPos
 
 	.widthTablePlayer:
 		lda playerXWidthTable, y
@@ -2197,7 +2603,7 @@ ObjectUpdateMovementLeft:
 	ldx objectId
 	beq .player ; si player
 
-	.object:
+	;.object:
 		sta tmpPosScreen
 		sty tmpPosX
 		lda objectFlags, x
@@ -2231,9 +2637,11 @@ ObjectUpdateMovementLeft:
 		ldy objectSpriteNum, x
 		cpy #$ff
 		bne .widthTablePlayer
-		; widthTableEnemy
-		;  TODO
-
+	; widthTableObject:
+		ldy objectType, x
+		cpy #$ff
+		lda objectXWidthTable1, y
+		bne .setPos
 	.widthTablePlayer:
 		lda playerXWidthTable, y
 
@@ -2254,10 +2662,11 @@ ObjectUpdateMovementLeft:
 		jsr ObjectVerifyBackgroundCollision
 		beq .end
 		clc
+		ldx objectId
+		ldy objectSpriteNum, x
 		lda $10
 		adc #$10
 		sta $0f
-
 		lda $00
 		and #$f0
 		clc
@@ -2685,14 +3094,9 @@ dataTitle:
 
 
 ;;;;;; Object DATA SPRITE ;;;;;
-objectXWidthTable
-    .db $08, $08, $08, $08 ;00
-	.db $08, $08, $08, $08 ;
-	.db $08, $08, $08, $08 ;08
-	.db $08, $08, $08, $08 ;
-	.db $08, $08, $08, $06 ;10
 
-;;;;;; Enemi DATA SPRITE ;;;;;
+
+;;;;;; Ennemi DATA SPRITE ;;;;;
   .include "data/enemy.asm"
 
 ;;;;;; Player DATA SPRITE ;;;;;
@@ -2771,9 +3175,180 @@ BankSwitchStage:
 	sta bankTable, y
 	
 	rts
+
+TestShotHit:
+	ldx objectId
+	lda objectFlags, x
+	and #$20 ; check si invisible
+	beq .visible
+	.end:
+		clc 
+		rts
+	.visible:
+
+	ldy objectSpriteNum, x
+	lda objectXWidthTable2, y
+	sta $01
+	lda objectYHeightTable2, y
+	sta $02
+
+	lda objectPosY, x
+	cmp #$f8 ; >= object est en dehors de l'écran (en bas)
+	beq .end
+
+	; Gestion Y, Soustrait la hauteur de l'objet (objectYHeightTable) 
+	;    de sa position verticale, résultat stocké dans $03
+	sec
+	sbc $02 ; posY - objectYHeightTable[y] 
+	sta $03
+	asl $02 ; Double la hauteur (ASL $02, décalage à gauche).
+	clc
+	adc $02
+	sta $02 ; save hauteur doublée pour détecter plus tard une collision
+
+	; Gestion X, Calcule la position horizontale de l'objet (objectPosX) 
+	;    en tenant compte de la position de défilement (scrollPosX).
+	sec
+	lda objectPosX, X ; Soustrait scroll
+	sbc scrollPosX
+	sec
+	sbc $01 ; Soustrait la largeur (objectXWidthTable) pour déterminer la position réelle de collision.
+	sta $00
+	asl $01
+	clc 
+	adc $01
+	sta $01 ; save 
+	; todo boss
+
+	jmp TestEnemyDamages
+
+	; rts
+
+TestEnemyDamages:
+	lda frameCounter
+	and #$01         ; permet d'alterner entre les frames paires et impaires pour équilibrer les tests
+	CLC
+	adc #$10   ; test ennemi id frame paire 10 12 14... impaires 11 13 15...
+	tax
+
+	.loop:
+		lda objectFlags, x
+		and #$80
+		bne .nextLoop ; si objet déjà touché nextloop
+		jsr TestCollisionWithWeapon
+		bcs .makeObjectHit ; object touché, on effectue la routine de hit
+	.nextLoop:
+		inx ; 2x inx parce qu'on teste une frame object paire et la suivante
+		inx ;    les objets impaires
+		cpx totalObjects
+		bcc .loop
+
+	clc
+	rts
+
+	.makeObjectHit:
+		;stx $0c ; objectId
+		
+		; flag l'object en tant que touché
+		lda objectFlags, x
+		ora #$80
+		sta objectFlags, x
+
+		; todo sound
+		ldx objectId
+		lda objectFlags, x ; supprime bullet
+ 		and #$04
+		bne .end
+		lda #$f8
+		sta objectPosY, x
+
+		.end:
+		sec
+		rts	
+
+TestCollisionWithPlayer:
+	lda #$02
+	bne TestCollisionWithWeapon_process
+TestCollisionWithWeapon:
+	lda #$04
+	TestCollisionWithWeapon_process:
+
+	and objectFlags, x ; si l'object est collisable
+	bne .checkPosY
+	clc ; non
+	rts
 	
+	.checkPosY:
+		lda objectPosY, x
+		cmp #$f8 ; Si objet Y >= #$f8 il est en dehors de l'écran (bas)
+		beq .end
+
+	ldy objectSpriteNum, x
+	cpy #$ff ; si enemy
+	bne .tableEnemy
+	ldy objectType, x
+	lda objectXWidthTable1, y
+	sta $0e
+	lda objectYHeightTable1, y
+	bne .setYheight
+	.tableEnemy:
+		lda objectXWidthTable2, y
+		sta $0e
+		lda objectYHeightTable2, y
+	.setYheight:
+		sta $0d
+
+	; Si objectPosY, x - $0d >= $02 pas de collision
+	sec
+	lda objectPosY, x
+	sbc $0d
+	cmp $02
+	bcs .end
+
+	; Si objectPosY, x + $0d < $03 pas de collision
+	clc
+	lda objectPosY,x
+	adc $0d
+	cmp $03
+	bcc .end
+
+	; si objectPosScreen, X != scrollPosScreen pas de collision
+	sec
+	lda objectPosX, x
+	sbc scrollPosX
+	sta $0c
+	lda objectPosScreen, x
+	sbc scrollPosScreen
+	bne .end
+
+	; si objectPosX - ScrollPosX < $0e pas de collision
+	lda $0c
+	sec
+	sbc $0e
+	bcc .end
+
+	; si objectPosX - ScrollPosX - $0e == $01 collision
+	cmp $01
+	beq .collision
+	; si objectPosX - ScrollPosX - $0e > $01 pas de collision
+	bcs .end
+
+	; if objectPosX - ScrollPosX + $0e >= $00 collision
+	clc 
+	lda $0c
+	adc $0e
+	cmp $00
+	bcc .end
+
+	.collision:
+		sec
+		rts
+	.end:
+		clc
+		rts
+
 LoadEnemies:
-	lda bossCurrentStrategy ; pas d'enemi si boss
+	lda bossCurrentStrategy ; pas d'ennemi si boss
 	beq .notBoss
 	.return:
 		rts
@@ -2786,10 +3361,10 @@ LoadEnemies:
 	sta $c005
 
 	; todo zigZagFireStatus
-	; todo spawn enemi après mort
+	; todo spawn ennemi après mort
 
 	lda screenMovedFlag
-	and #$01 ; #$01 un enemi peut être loadé
+	and #$01 ; #$01 un ennemi peut être loadé
 	beq .return ; #00 c'est qu'il n'y à rien à load = return 
 	lda screenMovedFlag ; direction  $41 droite $40 gauche
 	and #$fe
@@ -2798,10 +3373,10 @@ LoadEnemies:
 
 	rts
 
-; charge les enemis vers l'avant
+; charge les ennemis vers l'avant
 LoadEnemiesForward:
 	; ex: le perso se trouve sur le premier écran id = 0 
-	;     et l'enemi à charger écran 1
+	;     et l'ennemi à charger écran 1
 	;     si scrollPosX -1 donne < 0 ou > 255 on set carry
 	;     alors adc à scrollPosScreen sera 1
 
@@ -2821,7 +3396,7 @@ LoadEnemiesForward:
 		lda [currentRoomPointer], y ; id écran
 		cmp $05
 		bcc .setValue; id écran < perso écran 
-		bne .checkFoBackward ; <> go check si l'enemi n'est pas avant
+		bne .checkFoBackward ; <> go check si l'ennemi n'est pas avant
 		iny ; ici id écran = perso écran
 		lda [currentRoomPointer], y ; pos X
 		dey ; dey car on a iny pour le check de pos X
@@ -2830,15 +3405,15 @@ LoadEnemiesForward:
 		bcs .checkFoBackward ; <
 
 		.setValue:
-			; enemi X pos sur SON écran
+			; ennemi X pos sur SON écran
 			iny
 			lda [currentRoomPointer], y 
 			sta $00 ; /!\ $00 sera verouiller, voir mainLoop
-			; Enemi Y pos sur son écran
+			; Ennemi Y pos sur son écran
 			iny
 			lda [currentRoomPointer], Y
 			sta $01
-			; Enemi id
+			; Ennemi id
 			iny
 			lda [currentRoomPointer], y
 			
@@ -2854,7 +3429,7 @@ LoadEnemiesForward:
 	jsr BankSwitch
 
 	rts
-; Charge les enemis vers l'arrière
+; Charge les ennemis vers l'arrière
 LoadEnemiesBackward:
 	lda saveBank
 	jsr BankSwitch
@@ -2894,7 +3469,7 @@ LoadEnemyNumber:
 ;  $05 = object screen number
 ; SpawnObject
 SpawnEnemy:
-	sta $02 ; Enemi id
+	sta $02 ; Ennemi id
 	sty $03 ; save y
 	;cmp #$ff
 	;bne
@@ -2902,9 +3477,9 @@ SpawnEnemy:
 	lda $01 ; pos Y
 	txa
 	ldx #$0f
-	; cherche si l'enemi est déjà affiché
+	; cherche si l'ennemi est déjà affiché
 	.loop:
-		cmp enemySpawned, x
+		cmp enemySpawned, x ; meters+1,x
 		beq .spawned
 		dex
 		bpl .loop
@@ -2916,12 +3491,12 @@ SpawnEnemy:
 		ldx #$10
 		jsr FindFreeObject
 		bcs .loop
-		; set Enemi:	
+		; set Ennemi:	
 		lda $06 ; $0c restore currentEnemyIndex
 		sta enemySpawned, x
 		lda #$ff
 		sta objectSpriteNum, x
-		lda $02 ; enemi id
+		lda $02 ; ennemi id
 		sta objectType, x
 		lda $05 ; écran id
 		sta objectPosScreen, x 
@@ -2930,20 +3505,21 @@ SpawnEnemy:
 		lda $01 ; pox y
 		; cmp #$ff
 		sta objectPosY, x
-		ldy $02 ; enemi id
+		ldy $02 ; ennemi id
 		lda defaultEnemyFlags, y
 		sta objectFlags, x
 		tya
-		pha ; save enemi id
+		pha ; save ennemi id
 		lda defaultEnemySpeedTable, y
 		tay 
 		jsr InitEnemyDefaultSpeed
-		pla ; restore enemi id
+		pla ; restore ennemi id
 		tya
 		lda defaultEnemyFireDelay, y
 		sta objectFireDelay, x
-		lda #$14 
-		sta objectLifeMeter
+		; life ennemi à $14
+		lda #$40 
+		sta objectLifeMeter, x
 
 		lda #$00
 		sta objectActionStateCounter, x
@@ -2955,6 +3531,9 @@ SpawnEnemy:
 		ldy $03 ; restore y
 	rts
 
+; Carry
+;   1 = pas trouvé
+;   0 = trouvé
 FindFreeObject:
 	lda #$F8
 	.loop:
@@ -4088,16 +4667,62 @@ ObjectVerifyBackgroundCollision:
 	jsr BankSwitch
 
 	pla
-
 	rts
 
 	.enemy:
+		ldx objectId
+		ldy objectSpriteNum, x
+		cpy #$ff
+		bne .table2
+		;.table1
+			ldy objectType, x
+			lda objectYHeightTable1, y
+			bne .next
+		.table2:
+			lda objectYHeightTable2, y
+		.next:
+
+		pha
+		eor #$ff
+		CLC
+		adc #$01
+		clc
+		adc $03
+		.loopEnemy:
+			sta $0e
+			jsr ReadCurrentStageMap
+			cmp #$01
+			beq .loopEnemy
+		pla
+		sec
+		sbc #$01
+		clc
+		adc $03
+		sta $0e ; posY à check	
+		jsr ReadCurrentStageMap
+		cmp #$01
+		beq .endEnemy
+		lda #$00
+		sta currentTuilesState ; rest currentTileStat
+		pha
+		lda saveBank
+		jsr BankSwitch
+		pla	
 		rts
+
+		.endEnemy:
+			lda #$01
+			sta currentTuilesState
+			pha
+			lda saveBank
+			jsr BankSwitch
+			pla
+			rts
 
 ;
 ; $0E posY checker
 ; $0C tmp ObjectPosScreen
-; $0d  tmp objectPosX
+; $0d tmp objectPosX
 ;
 DoCollisionCheckFor:
 	lda $0a; save xpos
@@ -4113,7 +4738,7 @@ DoCollisionCheckFor:
 	sta $0e ; tmp tmp objectPosY
 	
 	ldx objectId
-	bne .analyzeTiles
+	bne .checkForEnemy
 
 	lda #$00
 	sta currentTuilesState+1
@@ -4141,6 +4766,47 @@ DoCollisionCheckFor:
 	jsr BankSwitch
 	pla
 	rts
+	.checkForEnemy:
+		ldx objectId
+		ldy objectSpriteNum, x
+		cpy #$ff ; enemy
+		bne .tableEnemy
+		ldy objectType, x
+		lda objectXWidthTable1, y
+		bne .readStageMap
+	.tableEnemy:
+		lda objectXWidthTable2, y
+	.readStageMap:
+		sec
+		sbc #$01
+		sta $0f
+		clc
+		lda $0a ; temp objectPosx
+		adc $0f
+		sta $0d
+		lda $02 ; temp objectPosScreen
+		adc #$00
+		sta $0c
+		jsr ReadCurrentStageMap
+		cmp #$01
+		beq .setTuilesState
+		cmp #$04
+		beq .setTuilesState
+		lda #$00
+		sta currentTuilesState+1
+		pha ; on push le resultat
+		lda saveBank
+		jsr BankSwitch
+		pla
+		rts
+	.setTuilesState:
+		lda #$01
+		sta currentTuilesState+1
+		pha ; on push le resultat
+	lda saveBank
+	jsr BankSwitch
+	pla	
+		rts
 
 XWidthTable:
     .db $00,$07 ;+7
@@ -4498,7 +5164,6 @@ UpdateGraphics:
 	lda saveBank
 	jsr BankSwitch
 	
-
     ; hide tous les sprites
 	ldy #$00
 	sty $0d ;  save spriteCounter
@@ -4626,7 +5291,7 @@ DrawObject:
 	; Get config en fonction du meta sprite
 	sta $0f ; Save pos Y du meta sprite
 	lda objectSpriteNum, x  ; L'id du sprite en cours
-	cmp #$ff ;sprite enemi 
+	cmp #$ff ;sprite ennemi 
 	bne .adjustSprite
 	jmp DrawEnemy
 	.adjustSprite:
@@ -5126,6 +5791,13 @@ NMI:
 	tax
 	sta bankTable, x
 	
+
+	lda $0d
+	eor randomSeed
+	adc frameCounter
+	lsr a
+	sta randomSeed
+
 	pla ; restore y
 	tay 
 	pla ; restore x
@@ -5141,20 +5813,197 @@ NMI:
 ;InitObjectDefaultSpeed
 InitEnemyDefaultSpeed:
 	lda defaultEnemySpeed, y
-	sta objectYSpeedFraction
+	sta objectYSpeedFraction, x
 	lda defaultEnemySpeed+1, y
-	sta objectYSpeed
+	sta objectYSpeed, x
 	lda defaultEnemySpeed+2, y
-	sta objectXSpeedFraction
+	sta objectXSpeedFraction, x
 	lda defaultEnemySpeed+3, y
-	sta objectXSpeed
-	lda defaultEnemySpeed+4, y
-
+	sta objectXSpeed, x
 	rts
+
+; Retourne la valeur absolue de le distance en Pixel entre
+;    le player et l'ennemi
+;    dand Y et A
+EnemySearchPlayer:
+	; Met l'ennemi coté gauche
+	lda objectFlags, x
+	and #$bf
+	sta objectFlags, x
+	; Enemy devant le perso (droite)
+	sec
+	lda objectPosX
+	sbc objectPosX, x
+	tay
+	lda objectPosScreen  ;perso enemy sur le même écran?
+	sbc objectPosScreen, x
+	bcc .notSameScreen
+	; Met l'ennemi coté droit
+	lda objectFlags, x
+	ora #$40
+	sta objectFlags, x
+	tya
+	rts
+	.notSameScreen:
+		tya       ; complément à 2 pour le nombre négatif
+		eor #$ff  ; valeur absolue 
+		adc #$01  ;
+	rts 
+
+; A
+; #$1A, #$2D sound bullet
+; #$1e 
+CreateEnemy:
+	pha 
+	cmp #$1a
+	beq .sound
+	cmp #$2d
+	bne .noSound
+	.sound:
+		; lda sound id
+		; jsr issueSound
+	.noSound:
+
+	pla
+	pha
+	ldx #$10
+	jsr FindFreeObject
+	bcs InitActor_end
+	pla
+
+; /!\ crateEnemy - InitActor /!\
+
+; Transforme un objet en un autre objet
+; A = enemy type
+; X = target enemy
+InitActor:
+	sta objectType, x
+	lda #$FF
+	sta objectSpriteNum, x
+	ldy objectId
+	; pos x/y
+	lda objectPosY, y
+	sta objectPosY, x
+	lda objectPosX, y
+	sta objectPosX, x
+	; écran
+	lda objectPosScreen, y
+	sta objectPosScreen, x
+	; direction
+	lda objectFlags, y
+	and #$40
+	ora #$02 ; set du flag 1 pour permettre de rentrer en collision avec le player
+	sta objectFlags, x
+	; vie
+	lda #$14
+	sta objectLifeMeter, x
+
+	lda #$00
+	sta objectActionStateCounter, x
+	sta objectFireDelay, x
+	sta objectLifeCycleCounter, x
+
+	clc
+	rts
+
+	InitActor_end:
+		pla
+		rts
 
 ; YSpeedFraction, YSpeed, XSpeedFraction and XSpeed
 defaultEnemySpeed:
-    .db $E0,$04,$30,$01 ;00 enemi
+    .db $00,$00,$20,$01 ;00 crackBoy
+    .db $02,$00,$20,$01 ;01 empty
+    .db $03,$00,$20,$01 ;02 empty
+    .db $04,$00,$20,$01 ;03 empty
+    .db $05,$00,$20,$01 ;04 empty
+    .db $06,$00,$20,$01 ;05 empty
+    .db $07,$00,$20,$01 ;06 empty
+    .db $00,$04,$00,$00 ;07 bonus
+    .db $09,$00,$20,$01 ;08 empty
+    .db $0a,$00,$20,$01 ;09 empty
+    .db $0b,$00,$20,$01 ;0a empty
+    .db $0c,$00,$20,$01 ;0b empty
+    .db $0d,$00,$20,$01 ;0c empty
+    .db $00,$00,$20,$01 ;0d empty
+    .db $00,$00,$20,$01 ;0e empty
+    .db $00,$00,$20,$01 ;0f empty
+    .db $00,$00,$20,$01 ;10 empty
+    .db $00,$00,$20,$01 ;11 empty
+    .db $00,$00,$20,$01 ;12 empty
+    .db $00,$00,$20,$01 ;13 empty
+    .db $00,$00,$20,$01 ;14 empty
+    .db $00,$00,$20,$01 ;15 empty
+    .db $00,$00,$20,$01 ;16 empty
+    .db $00,$00,$20,$01 ;17 empty
+    .db $00,$00,$20,$01 ;18 empty
+    .db $00,$00,$20,$01 ;19 empty
+    .db $00,$00,$20,$01 ;1a empty
+    .db $00,$00,$20,$01 ;1b empty
+    .db $00,$04,$00,$00 ;1c empty
+
+
+;TableObjectXWidthTable1
+objectXWidthTable1
+    .byte $08, $08, $08, $08 ;00
+    .byte $07, $08, $08, $0A 
+    .byte $06, $0C, $08, $02 ;08
+    .byte $1E, $08, $07, $06
+    .byte $08, $08, $08, $08 ;10
+    .byte $08, $09, $08, $02
+    .byte $04, $02, $01, $08 ;18
+    .byte $02, $0C, $07, $0C
+    .byte $04, $07, $02, $02 ;20
+    .byte $1E, $02, $04, $08
+    .byte $08, $08, $08, $0C ;28
+    .byte $01, $01, $06, $01
+    .byte $01, $06, $01, $06 ;30
+    .byte $06, $08, $07, $07
+    .byte $07, $03, $1E, $01 ;38
+    .byte $04, $06, $06, $04
+    .byte $04, $04, $04, $02 ;40
+    .byte $08, $08, $04, $04 ;44
+    .byte $06, $04, $09      ;48,49,4A
+objectXWidthTable2 ; at FAB5
+    .db $08, $08, $08, $08 ;00
+    .db $08, $08, $08, $08
+    .db $08, $08, $08, $08 ;08
+    .db $08, $08, $08, $08
+    .db $08, $08, $08, $08 ;10
+    .db $08, $08, $08, $08
+    .db $08, $00, $04, $08 ;18
+objectYHeightTable1
+    .byte $08, $08, $08, $04 ;00
+    .byte $07, $08, $0C, $08
+    .byte $08, $14, $09, $08 ;08
+    .byte $06, $08, $04, $1E
+    .byte $08, $08, $0C, $08 ;10
+    .byte $10, $0C, $08, $08
+    .byte $04, $08, $02, $08 ;18
+    .byte $02, $04, $08, $07
+    .byte $04, $07, $08, $08 ;20
+    .byte $06, $08, $04, $08
+    .byte $08, $08, $18, $04 ;28
+    .byte $01, $01, $06, $01
+    .byte $01, $06, $01, $06 ;30
+    .byte $06, $08, $07, $07
+    .byte $07, $28, $1E, $01 ;38
+    .byte $00, $00, $00, $08
+    .byte $08, $08, $08, $10 ;40
+    .byte $08, $08, $04, $04 ;44
+    .byte $06, $04, $09      ;48,49,4A
+objectYHeightTable2
+    .db $0C, $0C, $0C, $0C ;00
+    .db $0C, $0C, $0C, $0C ;
+    .db $0C, $0C, $0C, $0C ;08
+    .db $0C, $0C, $0C, $0C ;
+    .db $0C, $0C, $0C, $0C ;10
+    .db $0C, $0C, $0C, $0C
+    .db $0C, $00, $04, $0C ;18
+
+
+WeaponDamageA:
+	.db $14
 
 
 ; Interupt
