@@ -70,7 +70,6 @@ metaEnemySpritesTable:
 	.dw metaSpritesEnemyBonus ;40	
 	.dw metaSpritesEnemyBonus ;41	
 
-
 metaSpritesEnemyDispo:
 
 metaSpritesEnemyBonus:
@@ -142,7 +141,7 @@ dataMetaSpriteEnemyKilling4:
 
 dataMetaSpriteEnemyBonnus
 	.db $03
-	.db $02
-	.db $41, $00
-	.db $f7, $00
+	.db $0a
 	.db $41, $40
+	.db $f7, $00
+	.db $41, $00

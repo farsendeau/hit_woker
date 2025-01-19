@@ -705,13 +705,45 @@ MainLoop:
 		JMP MainLoop
 
 RunCollisionChecks:
+	; X
 	sec
-	lda objectPosX
-	sbc scrollPosX
+	lda objectPosX ; milieu du perso
+	sbc scrollPosX 
 	sec
 	sbc #$07
-	sta $00
+	sta $00  ; arrière du perso 
+	clc
+	adc #$0E 
+	sta $01  ; avant du perso
+	; Y
+	sec
+	lda objectPosY ; milieu du perso
+	sbc #$A0 ; $0b 
+	sta $03  ; haut du perso
+	clc
+	adc #$26 ; bas du perso ; #$16
+	sta $02
 
+	;lda playerBlinkState
+	; test boss stratégie
+
+	lda frameCounter
+	and #$01
+	clc
+	adc #$10 ; object paires ou impaires
+	tax
+
+	.loop:
+		jsr TestCollisionWithPlayer
+		bcs .doCollision
+		inx
+		inx
+		cpx totalObjects
+		bcc .loop
+		rts ; pas de collision
+
+	.doCollision:
+	
 	rts
 
 ; A = currentStripeEndType (0=right 1=up 2=left 3=down)  
@@ -1421,7 +1453,8 @@ EnemyIAMovementsAndDamageCheck:
 	.checkLifeCycleCounter:
 		lda objectLifeCycleCounter, X
 		bne .checkIfInScreen
-
+	
+	; Direction
 	lda objectFlags, x
 	and #$40
 	beq .left
@@ -2050,6 +2083,7 @@ ObjectDoCollisionChecksAndAvoidWalls:
 		cpy #$ff
 		bne .playerHeight
 	.enenmyHeight:
+		ldy objectType, x
 		lda objectYHeightTable1, y
 		bne .handleHeight
 	.playerHeight:
@@ -2639,7 +2673,6 @@ ObjectUpdateMovementLeft:
 		bne .widthTablePlayer
 	; widthTableObject:
 		ldy objectType, x
-		cpy #$ff
 		lda objectXWidthTable1, y
 		bne .setPos
 	.widthTablePlayer:
@@ -3267,11 +3300,11 @@ TestEnemyDamages:
 		rts	
 
 TestCollisionWithPlayer:
-	lda #$02
-	bne TestCollisionWithWeapon_process
+	lda #$02 ; set touchable par le corps du player
+	bne TestCollisionWith_process
 TestCollisionWithWeapon:
-	lda #$04
-	TestCollisionWithWeapon_process:
+	lda #$04 ; set touchable par les armes du player
+	TestCollisionWith_process:
 
 	and objectFlags, x ; si l'object est collisable
 	bne .checkPosY
@@ -4652,7 +4685,7 @@ ObjectVerifyBackgroundCollision:
 	.loop:
 		clc
 		lda $03 ; tmp objectPosY
-		adc blockHeightTable, x
+		adc blockHeightTable, x 
 		sta $0e ; posY à check
 		jsr ReadCurrentStageMap
 		sta currentTuilesState,x ; rest currentTileStat
@@ -4670,7 +4703,7 @@ ObjectVerifyBackgroundCollision:
 	rts
 
 	.enemy:
-		ldx objectId
+		;ldx objectId ; todo voir si besoin puisqu'on vient du dessus
 		ldy objectSpriteNum, x
 		cpy #$ff
 		bne .table2
@@ -4682,10 +4715,11 @@ ObjectVerifyBackgroundCollision:
 			lda objectYHeightTable2, y
 		.next:
 
-		pha
-		eor #$ff
+		; check top
+		pha ; save yHeight ; exp #12
+		eor #$ff  ; inverse tout les bit pour négatif -#13
 		CLC
-		adc #$01
+		adc #$01 ; complément à 2 -#12 
 		clc
 		adc $03
 		.loopEnemy:
@@ -4693,7 +4727,8 @@ ObjectVerifyBackgroundCollision:
 			jsr ReadCurrentStageMap
 			cmp #$01
 			beq .loopEnemy
-		pla
+		; check bottom	
+		pla ; restore yHeight
 		sec
 		sbc #$01
 		clc
@@ -4814,12 +4849,12 @@ XWidthTable:
 
 ;
 ; permet de checker les 3 tuiles sur lesquelles est le perso:
-;     $f4: 3 tuiles par rapport au haut du perso 
-;     $fc: 2 tuiles ...
-;     $0b: 1 tuile  ...
+;     $f4: 1.5 tuile au dessus du perso 
+;     $fc: 4px au dessus dud perso
+;     $0b: 1 tuile (-1px) en dessous du perso
 ; 
 blockHeightTable:
-	.db $f4, $fc, $0b
+	.db $f4, $fc, $0b ; -12, -4 +11
 
 
 AnalyzeCurrentTile:
@@ -4968,9 +5003,10 @@ ReadCurrentStageMap:
 	
 ;
 ; bloc par lvl
-;
-; $02 block climable up
-; $03 block killable (pique)
+; $00 bloc traversable
+; $01 bloc qui stop
+; $02 bloc climable up
+; $03 bloc killable (pique)
 ;
 BlockTransparencyMap:
 	.db $00, $01, $02, $03
@@ -5884,6 +5920,7 @@ InitActor:
 	; pos x/y
 	lda objectPosY, y
 	sta objectPosY, x
+	
 	lda objectPosX, y
 	sta objectPosX, x
 	; écran
@@ -5988,7 +6025,7 @@ objectYHeightTable1
     .byte $01, $06, $01, $06 ;30
     .byte $06, $08, $07, $07
     .byte $07, $28, $1E, $01 ;38
-    .byte $00, $00, $00, $08
+    .byte $08, $08, $08, $08
     .byte $08, $08, $08, $10 ;40
     .byte $08, $08, $04, $04 ;44
     .byte $06, $04, $09      ;48,49,4A
