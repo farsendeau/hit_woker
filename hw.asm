@@ -170,6 +170,12 @@ SPRITE_TABLE = $0200
 CURRENT_SPRITE_DATA = $0204 ;(200-203 sprite 0)
 PLAYER_NUMBER_STATE_MOVING = 03 ; Nombre de phase de l'action de déplacement
 
+; Weapon
+MAX_WEAPON = $01
+ID_WEAPON_A = $01
+ID_WEAPON_B = $02
+ID_WEAPON_C = $03
+
 ;-----------
 ; bank 01
   .include "data/level/level_1.asm"
@@ -684,6 +690,20 @@ StageBeginFromDeath:
 	jsr NextFrame
 
 MainLoop:
+	; Select weapon
+	lda joyD
+	and #$08 ; start est préssé, changment d'arme
+	beq .weaponSelectEnd 
+		lda weaponSelect
+		cmp #MAX_WEAPON ; inc si besoin d'ajouter armes
+		bcc .nextWeapon
+			lda #$00
+			sta weaponSelect
+			beq .weaponSelectEnd
+		.nextWeapon:
+			inc weaponSelect
+	.weaponSelectEnd:
+
 	jsr RecalculateActivesLowerIndex
 	jsr PlayerIA
 	lda playerWalkTimer
@@ -718,7 +738,7 @@ RunCollisionChecks:
 	; Y
 	sec
 	lda objectPosY ; milieu du perso
-	sbc #$A0 ; $0b 
+	sbc #$0A ; $0b 
 	sta $03  ; haut du perso
 	clc
 	adc #$26 ; bas du perso ; #$16
@@ -743,7 +763,21 @@ RunCollisionChecks:
 		rts ; pas de collision
 
 	.doCollision:
-	
+		lda objectSpriteNum, x
+		cmp #$ff ; #$ff = item
+		bne .collisionEnemy
+	.collisionItem:
+	; SI ID >= #$3C et ID < #$48 l'item est un bonus
+		lda objectType, X ; item d'item
+		cmp #$48 
+		bcs .collisionEnemy
+		cmp #$3c
+		bcc .collisionEnemy
+		jmp GotItem
+
+	.collisionEnemy:
+
+
 	rts
 
 ; A = currentStripeEndType (0=right 1=up 2=left 3=down)  
@@ -1567,6 +1601,10 @@ EnemyKilled:
 	cpy #$3b ; si pas de proba pas de bonus
 	beq .end
 	; Spawn le bonus
+
+	; todo à supptimer pour le test
+	ldy #$3c;
+
 	tya 
 	jsr CreateEnemy
 	bcs .end
@@ -2062,6 +2100,7 @@ ObjectDoCollisionChecksAndAvoidWalls:
 	ldx objectId
 	jsr ObjectCheckIfOutScreenVertically
 	bcc .isPlayer
+	
 	ldx objectId
 	bne .todo
 	; todo player tombe en dehors de l'écran
@@ -3318,13 +3357,13 @@ TestCollisionWithWeapon:
 
 	ldy objectSpriteNum, x
 	cpy #$ff ; si enemy
-	bne .tableEnemy
+	bne .tableObject
 	ldy objectType, x
 	lda objectXWidthTable1, y
 	sta $0e
 	lda objectYHeightTable1, y
 	bne .setYheight
-	.tableEnemy:
+	.tableObject:
 		lda objectXWidthTable2, y
 		sta $0e
 		lda objectYHeightTable2, y
@@ -5271,6 +5310,9 @@ DrawWaepon:
 	lda #$00
 	sta $06
 	jsr WriteSprite
+	
+	lda weaponSelect ; pour l'arme ($00) principale pas de minution 
+	beq .end
 
 	; Weapon meters
 	lda #$E6
@@ -5280,12 +5322,14 @@ DrawWaepon:
 	beq .next
 	; digit value + digit bank emplacement (ex weapon 2 + #$e6)
 	; digit 1 value
-	lda weaponMeter
+
+	ldx weaponSelect
+	lda weaponMeter+1, x
 	clc
 	adc #$E6
 	sta $09
 	; digit 2 value
-	lda weaponMeter+1
+	lda weaponMeter, x
 	clc 
 	adc #$E6
 	sta $07
@@ -5310,6 +5354,7 @@ DrawWaepon:
 	sta $06
 	jsr WriteSprite
 
+	.end:
 	rts
 
 ;
@@ -5842,6 +5887,86 @@ NMI:
 	
 	RTI 	
 
+;------------BONUS-----------------
+
+GotItem:
+	sec 
+	sbc #$3c
+	asl a
+	tay
+	; On dége l'item
+	lda #$f8
+	sta objectPosY, x
+
+	lda ItemTable, y
+	sta $04
+	lda ItemTable+1, y 
+	sta $05
+	jmp [$04] ; go bonus fonction
+
+ItemTable:
+	.dw GotBonusA
+	.dw GotBonusB
+	.dw GotBonusC
+	.dw GotTruc
+	.dw GotTruc
+	.dw GotTruc
+
+GotBonusA:
+    lda #ID_WEAPON_A
+    tax
+    jsr UpdateWeaponMeter
+
+    rts
+
+NoLimit:
+    rts
+
+GotBonusB:
+	rts
+
+GotBonusC:
+	rts
+
+GotTruc:
+	rts
+
+;
+; X = weapon id
+UpdateWeaponMeter:
+	; Ajoute 5 aux unités
+	clc
+    lda weaponMeter, x
+    adc #$05
+    sta weaponMeter, x
+
+    ; Vérifie si on dépasse 9
+    cmp #$0A
+    bcc .checkLimit ; Si inférieur à 10, on saute l'ajustement
+
+    ; Ajustement pour dépasser 9 -> ajouter 1 aux dizaines et soustraire 10 des unités
+    sbc #$0A
+    sta weaponMeter, x
+    inc weaponMeter+1, x
+
+	.checkLimit:
+		; Vérifie si on a atteint 99
+		lda weaponMeter+1, x
+		cmp #$0A
+		bcc NoLimit ; Si on est inférieur à 10, pas de problème
+
+		lda #$09
+		sta weaponMeter, x
+		lda #$09
+		sta weaponMeter+1, x
+
+	; retoune à RunCollisionChecks
+	pla
+	pla
+
+	rts
+
+
 ;-------------------	
   .bank 15		;07 (2/2 last bank/fixed)
   .org $E000
@@ -6002,13 +6127,25 @@ objectXWidthTable1
     .byte $08, $08, $04, $04 ;44
     .byte $06, $04, $09      ;48,49,4A
 objectXWidthTable2 ; at FAB5
-    .db $08, $08, $08, $08 ;00
-    .db $08, $08, $08, $08
-    .db $08, $08, $08, $08 ;08
-    .db $08, $08, $08, $08
-    .db $08, $08, $08, $08 ;10
-    .db $08, $08, $08, $08
-    .db $08, $00, $04, $08 ;18
+    .byte $08, $08, $08, $08 ;00
+    .byte $08, $08, $08, $08
+    .byte $08, $08, $08, $08 ;08
+    .byte $08, $08, $08, $08
+    .byte $08, $08, $08, $08 ;10
+    .byte $08, $08, $08, $08
+    .byte $08, $00, $04, $08 ;18
+    .byte $08, $08, $08, $08
+    .byte $08, $08, $08, $08 ;20
+    .byte $08, $10, $10, $08
+    .byte $08, $08, $08, $08 ;28
+    .byte $08, $10, $10, $10
+    .byte $10, $10, $0E, $08 ;30
+    .byte $08, $08, $08, $08
+    .byte $08, $08, $04, $08 ;38
+    .byte $08, $08, $08, $08
+    .byte $08, $08, $08, $08 ;40
+    .byte $08, $08, $08, $08 ;44
+    .byte $08, $06, $08      ;48,49,4A
 objectYHeightTable1
     .byte $08, $08, $08, $04 ;00
     .byte $07, $08, $0C, $08
