@@ -63,8 +63,8 @@ metaEnemySpritesTable:
 	.dw metaSpritesEnemyDispo ;39
 	.dw metaSpritesEnemyDispo ;3a
 	.dw metaSpritesEnemyDispo ;3b
-	.dw metaSpritesEnemyBonus ;3c
-	.dw metaSpritesEnemyBonus ;3d
+	.dw metaSpritesEnemyBonusB ;3c
+	.dw metaSpritesEnemyBonusC ;3d
 	.dw metaSpritesEnemyBonus ;3e	
 	.dw metaSpritesEnemyBonus ;3F	
 	.dw metaSpritesEnemyBonus ;40	
@@ -73,7 +73,11 @@ metaEnemySpritesTable:
 metaSpritesEnemyDispo:
 
 metaSpritesEnemyBonus:
+metaSpritesEnemyBonusB:
 	.db $00, $06
+
+metaSpritesEnemyBonusC:
+	.db $00, $07
 
 metaSpritesEnemyCrackBoy:
     .db $16, $00, $01
@@ -88,7 +92,8 @@ dataMetaSpriteEnemyTable:
 	.dw dataMetaSpriteEnemyKilling2
 	.dw dataMetaSpriteEnemyKilling3
 	.dw dataMetaSpriteEnemyKilling3
-	.dw dataMetaSpriteEnemyBonnus
+	.dw dataMetaSpriteEnemyBonnusB
+	.dw dataMetaSpriteEnemyBonnusC
 
 dataMetaSpriteEnemyCrackBoy1:
     .db $09 ; 9 sprite
@@ -139,9 +144,16 @@ dataMetaSpriteEnemyKilling4:
 	.db $02
 	.db $40, $00
 
-dataMetaSpriteEnemyBonnus
+dataMetaSpriteEnemyBonnusB
 	.db $03
 	.db $0a
 	.db $41, $40
 	.db $f7, $00
+	.db $41, $00
+
+dataMetaSpriteEnemyBonnusC
+	.db $03
+	.db $0a
+	.db $41, $40
+	.db $f8, $00
 	.db $41, $00

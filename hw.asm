@@ -171,10 +171,10 @@ CURRENT_SPRITE_DATA = $0204 ;(200-203 sprite 0)
 PLAYER_NUMBER_STATE_MOVING = 03 ; Nombre de phase de l'action de déplacement
 
 ; Weapon
-MAX_WEAPON = $01
-ID_WEAPON_A = $01
-ID_WEAPON_B = $02
-ID_WEAPON_C = $03
+MAX_WEAPON = $02 ; prend en compte le $00
+ID_WEAPON_A = $00
+ID_WEAPON_B = $01
+ID_WEAPON_C = $02
 
 ;-----------
 ; bank 01
@@ -1561,6 +1561,7 @@ IAObjectHit:
 
 weaponDamageTable:
 	.dw WeaponDamageA
+	.dw WeaponDamageB
 
 
 
@@ -1765,6 +1766,7 @@ RunWeaponIA:
 weaponIATable:
 	.dw weaponIAA
 	.dw weaponIAB
+	.dw weaponIAB
 
 weaponIAA:
 	ldx #$02
@@ -1787,15 +1789,17 @@ WeaponIATestShotHit:
 	rts
 
 weaponIAB:
-	rts
+	ldx #$03
+	lda #$04
+	bne WeaponIATestShotHit ; inconditiel jump
 
 PlayerWeaponFire:
 	lda weaponSelect 
-	tax
 	asl A
-	TAY
+	tay
 	beq .selectWeapon ; le premier weapon (coup de poing) n'a pas besoin de meter
-	lda weaponMeter, x
+	lda weaponMeter, y
+	ora weaponMeter+1, y
 	bne .selectWeapon
 	rts ; Si plus de jus pour le weapon on fait rien
 	.selectWeapon:
@@ -1806,10 +1810,11 @@ PlayerWeaponFire:
 		jmp [$00] ; jump WeaponFireXX
 
 weaponSelectTable:
-	.dw WeaponFireHand
+	.dw WeaponFireA
+	.dw WeaponFireB
 
-WeaponFireHand:
-	ldx #$02 ; les shoots commence au troisième objet
+WeaponFireA:
+	ldx #$02 ; les shoots commence au troisième donc object id = 02 01 00 
 	.loopShoot:
 		lda objectPosY, x
 		cmp #$f8 ; #$f8 = objet dispo
@@ -1833,13 +1838,27 @@ WeaponFireHand:
 		ldx objectId
 	rts
 
+WeaponFireB:
+	lda weaponSelect
+	ora #$c0 
+	sta weaponFiring ; concaténation des deux msb + id du weapon =  1100 0001
+	ldx #$03 ; type de weapon ; probleme ici
+	lda #$01 ; Objet ID
+	jsr LaunchWeaponShot
+	lda #$1f
+	sta objectFireDelay ; delai avant shoot (player)
+
+	; todo sound
+	jsr WeaponConsumed
+	rts
+
 ; X = objet id
 ; A = fire type
 ;     0 = ??
-;     1 = ??
+;     1 = B
 ;     2 = ??
 ;     3 = ??
-;     4 = hand
+;     4 = A
 ;     5 = ??
 ;     6 = ??
 LaunchWeaponShot:
@@ -1922,11 +1941,36 @@ LaunchWeaponShot:
 ; 8->ObjectPosX
 weaponFireData:
     .db $60,$00,$04,$00,$00,$00,$04,$00,$10 ;f shoot
-    .db $61,$00,$04,$00,$00,$00,$00,$EC,$00 ;f shield (?)
+    .db $05,$00,$00,$00,$00,$00,$04,$06,$10 ; weapon type B
     .db $00,$00,$24,$00,$00,$00,$00,$F0,$10 ;guts debris
     .db $6C,$00,$15,$00,$03,$A0,$03,$F0,$10 ;guts block being carried(?)
-    .db $02,$00,$00,$00,$00,$00,$04,$06,$10 ;P
+    .db $02,$00,$00,$00,$00,$00,$04,$06,$10 ; weapon type A
 
+;WeaponConsumePower
+WeaponConsumed:
+    lda weaponSelect
+    asl a
+    tax 
+
+    ; Vérifier si les unités sont à zéro
+    lda weaponMeter, x
+    bne .decUnits
+
+    ; Si unités = 0, vérifier les dizaines
+    lda weaponMeter+1, x
+    beq .end  ; Si dizaines = 0, on sort
+
+    ; Décrémenter les dizaines et remettre les unités à 9
+    dec weaponMeter+1, x
+    lda #$09
+    sta weaponMeter, x
+    rts
+
+	.decUnits:
+    	dec weaponMeter, x  ; Décrémenter les unités normalement
+
+	.end:
+    	rts
 
 LadderInit:
 	; init du flag
@@ -5323,7 +5367,9 @@ DrawWaepon:
 	; digit value + digit bank emplacement (ex weapon 2 + #$e6)
 	; digit 1 value
 
-	ldx weaponSelect
+	lda weaponSelect
+	asl a
+	tax
 	lda weaponMeter+1, x
 	clc
 	adc #$E6
@@ -5898,37 +5944,33 @@ GotItem:
 	lda #$f8
 	sta objectPosY, x
 
-	lda ItemTable, y
+	lda itemTable, y
 	sta $04
-	lda ItemTable+1, y 
+	lda itemTable+1, y 
 	sta $05
 	jmp [$04] ; go bonus fonction
 
-ItemTable:
-	.dw GotBonusA
+itemTable:
 	.dw GotBonusB
 	.dw GotBonusC
 	.dw GotTruc
 	.dw GotTruc
 	.dw GotTruc
 
-GotBonusA:
-    lda #ID_WEAPON_A
-    tax
-    jsr UpdateWeaponMeter
-
-    rts
-
-NoLimit:
-    rts
-
 GotBonusB:
-	rts
-
+	lda #ID_WEAPON_B
+	asl a
+	tax
+    jsr UpdateWeaponMeter
 GotBonusC:
-	rts
+	lda #ID_WEAPON_C
+	asl a
+	tax
+    jsr UpdateWeaponMeter
+	; rts Dans UpdateWeaponMeter
 
 GotTruc:
+	; todo
 	rts
 
 ;
@@ -5953,14 +5995,14 @@ UpdateWeaponMeter:
 		; Vérifie si on a atteint 99
 		lda weaponMeter+1, x
 		cmp #$0A
-		bcc NoLimit ; Si on est inférieur à 10, pas de problème
+		bcc .noLimit ; Si on est inférieur à 10, pas de problème
 
 		lda #$09
 		sta weaponMeter, x
 		lda #$09
 		sta weaponMeter+1, x
-
 	; retoune à RunCollisionChecks
+	.noLimit:
 	pla
 	pla
 
@@ -6128,7 +6170,7 @@ objectXWidthTable1
     .byte $06, $04, $09      ;48,49,4A
 objectXWidthTable2 ; at FAB5
     .byte $08, $08, $08, $08 ;00
-    .byte $08, $08, $08, $08
+    .byte $08, $08, $10, $08
     .byte $08, $08, $08, $08 ;08
     .byte $08, $08, $08, $08
     .byte $08, $08, $08, $08 ;10
@@ -6177,7 +6219,10 @@ objectYHeightTable2
 
 
 WeaponDamageA:
-	.db $14
+	.db $14   ; crackboy
+
+WeaponDamageB
+	.db $20  ; crackboy
 
 
 ; Interupt

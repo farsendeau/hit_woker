@@ -43,7 +43,7 @@ metaSpritesActionTable:
 	.dw metaSpritesShoot4
 	.dw metaSpritesActionMovingSlowing
 	.dw metaSpritesActionStandingFiring
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesShoot2
 	.dw metaSpritesActionMovingRun
 	.dw metaSpritesActionMovingRunFiring
 	.dw metaSpritesActionDISPO
@@ -79,6 +79,9 @@ metaSpritesActionMovingSlowing:
 metaSpritesShoot4:
 	.db $00, $0a
 
+metaSpritesShoot2:
+	.db $00, $0e
+
 metaSpritesActionMovingRun:
 	.db $36, $02, $03, $02, $03	
 
@@ -109,7 +112,7 @@ metaSpritesActionDeath:
 ;     01 : Id offsetTable
 ;     02 : tile Id
 ;     03 : tile Attr 
-;     xx : boucle [01 -> 04] * 00
+;     xx : boucle [02 -> 03] * 00
 ; 
 dataMetaSpriteTable:
 	.dw dataMetaSpriteStanding
@@ -126,6 +129,7 @@ dataMetaSpriteTable:
 	.dw dataMetaSpriteMovingRunFire1
 	.dw dataMetaSpriteMovingRunFire2
 	.dw dataMetaSpriteLadderFire
+	.dw dataMetaSpritesShootB
 
 
 dataMetaSpriteStanding:
@@ -255,6 +259,12 @@ dataMetaSpritesShoot1:
 	.db $01 ; 1 sprite
 	.db $00 ;offsetLanding
 	.db $0c, $00
+
+dataMetaSpritesShootB:	
+	.db $02 ; 2 sprite
+	.db $00 ;offsetLanding
+	.db $3d, $00
+	.db $3e, $00
 
 dataMetaSpriteMovingRunFire1:
 	.db $09 ; 09 sprites
