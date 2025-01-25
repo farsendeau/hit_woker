@@ -318,6 +318,7 @@ offsetTable:
 	.dw offsetLadderFire
 	.dw offsetRunningFire
 	.dw offsetObjectBonus
+	.dw offsetEnemyKill
 
 ;
 ; Contient les offsetId de chaque sprite composant le metasprite
@@ -342,6 +343,8 @@ offsetRunningFire:
 	.db $00, $01, $02, $03, $04, $0a, $05, $06, $0b, $07, $08
 offsetObjectBonus:
 	.db $04, $03, $02
+offsetEnemyKill:
+	.db $00, $01, $03, $04
 ;
 ; Décalage de pixel ; (pas pour ladder)
 ; 00 = f4

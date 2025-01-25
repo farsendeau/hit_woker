@@ -1599,12 +1599,12 @@ EnemyKilled:
 		bpl .loop
 	.endLoop:
 	
+	; todo à
+	;ldy #$3b
+
 	cpy #$3b ; si pas de proba pas de bonus
 	beq .end
 	; Spawn le bonus
-
-	; todo à supptimer pour le test
-	ldy #$3c;
 
 	tya 
 	jsr CreateEnemy
@@ -5637,7 +5637,6 @@ DrawEnemy:
 	lda dataMetaSpriteEnemyTable+1, y
 	sta $01
 	jmp DrawObjectSet
-
 
 	rts
 

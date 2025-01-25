@@ -74,16 +74,16 @@ metaSpritesEnemyDispo:
 
 metaSpritesEnemyBonus:
 metaSpritesEnemyBonusB:
-	.db $00, $06
+	.db $00, $05
 
 metaSpritesEnemyBonusC:
-	.db $00, $07
+	.db $00, $06
 
 metaSpritesEnemyCrackBoy:
     .db $16, $00, $01
 
 metaSpritesEnemyKilling:
-	.db $32, $02, $03, $04, $05
+	.db $52, $02, $02, $03, $03, $04, $04
 
 dataMetaSpriteEnemyTable:
     .dw dataMetaSpriteEnemyCrackBoy1 
@@ -91,9 +91,28 @@ dataMetaSpriteEnemyTable:
 	.dw dataMetaSpriteEnemyKilling1
 	.dw dataMetaSpriteEnemyKilling2
 	.dw dataMetaSpriteEnemyKilling3
-	.dw dataMetaSpriteEnemyKilling3
 	.dw dataMetaSpriteEnemyBonnusB
 	.dw dataMetaSpriteEnemyBonnusC
+
+;-------------------
+; Récap attr:
+;-------------------
+; 76543210
+; ||||||-- palette
+; |||----- rien
+; ||------ bg prio, 0=devant bg; 1= derrière bg
+; |------- Flip horiontal
+; -------- Flip vertical 
+
+;---------------------------
+; dataMetaSpriteEnemyXX INFO
+; --------------------------
+; bit   | info
+;-----------
+; 00    | Nombre de sprite
+; 01    | Id offset
+; 02/03 | Id du sprite / attr (voir ci-dessus)
+; xx/xx | boucle sur 02/03 
 
 dataMetaSpriteEnemyCrackBoy1:
     .db $09 ; 9 sprite
@@ -125,24 +144,28 @@ dataMetaSpriteEnemyCrackBoy2:
 	.db $38, $00
 
 dataMetaSpriteEnemyKilling1:
-	.db $01
-	.db $02
+	.db $04 ; nb sprite
+	.db $0b ; offset ID
 	.db $40, $00
+	.db $40, $40
+	.db $40, $80
+	.db $40, $c0
 
 dataMetaSpriteEnemyKilling2:
-	.db $01
-	.db $02
-	.db $40, $00
+	.db $04
+	.db $0b
+	.db $42, $00
+	.db $42, $40
+	.db $42, $80
+	.db $42, $c0
 
 dataMetaSpriteEnemyKilling3:
-	.db $01
-	.db $02
-	.db $40, $00
-
-dataMetaSpriteEnemyKilling4:
-	.db $01
-	.db $02
-	.db $40, $00
+	.db $04
+	.db $0b
+	.db $43, $00
+	.db $43, $40
+	.db $43, $80
+	.db $43, $c0
 
 dataMetaSpriteEnemyBonnusB
 	.db $03
