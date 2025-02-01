@@ -56,7 +56,7 @@ metaSpritesActionTable:
 	.dw metaSpritesActionHitGround
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
-	.dw metaSpritesActionDISPO
+	.dw metaSpritesActionJump2 ; hit
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionDISPO
 	.dw metaSpritesActionLadder
@@ -105,6 +105,9 @@ metaSpritesActionHitGround:
 
 metaSpritesActionDeath:
 	.db $00, $08
+
+metaSpritesActionJump2:
+	.db $18, $02, $08
 
 ;
 ; Pour dataSpriteXX

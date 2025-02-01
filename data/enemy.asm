@@ -1,7 +1,8 @@
 ;
 ; $00,    msb nombre d'action (commencant par 00)
 ;         lsb nombre frame avant changement
-; $01-$xx id dataMetaSpriteEnemyTable     
+; $01-$xx id dataMetaSpriteEnemyTable  
+; objet type   
 metaEnemySpritesTable:
     .dw metaSpritesEnemyCrackBoy; 00
     .dw metaSpritesEnemyDispo ;01

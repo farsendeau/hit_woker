@@ -67,8 +67,7 @@ forcedInputData .rs 1
 previousEnemyIndex .rs 1
 currentEnemyIndex .rs 1
 
-bossCurrentStrategy .rs 1
-bossFightingId .rs 1 ; FightingBossNum
+
 
 totalObjects .rs 1
 objectId .rs 1 ;(RefObjectNumber)
@@ -83,7 +82,14 @@ drawMetersFlag .rs 1
 playerWalkTimer .rs 1
 playerStandingTimer .rs 1
 playerBlinkState .rs 1 ; Timer: 0 = no blinking, #$6f = max
+playerLift .rs 1 ; décalage lorsque perso se fait toucher
+
+bossCurrentStrategy .rs 1
+bossFightingId .rs 1 ; FightingBossNum ; qui est égale au stageID 01 = boss1 02 = boss2 etc...
 bossBlinkState .rs 1
+bossVariable43 .rs 1
+bossVariable44 .rs 1
+bossVariable3F .rs 1
 
 activesLowerIndex .rs 1
 
@@ -165,10 +171,19 @@ ROOM_SHUTTER_BLOCK_DATA = $bf40
 ROOM_SHUTTER_BLOCK_PALS = $bF70
 ROOM_SHUTTER_INFO    = $bF80
 
+ROOM_BOSS_MASK = $e0 ; masque pour les salles des boss
+
 ; Sprite
 SPRITE_TABLE = $0200 
 CURRENT_SPRITE_DATA = $0204 ;(200-203 sprite 0)
 PLAYER_NUMBER_STATE_MOVING = 03 ; Nombre de phase de l'action de déplacement
+
+PLAYER_SPRITE_STANDING = $00
+PLAYER_SPRITE_HIT_1 = $12
+
+; ObjetType
+OBJECT_TYPE_ENEMY_KILLING = $1b
+OBJECT_TYPE_BOSS = $1c
 
 ; Weapon
 MAX_WEAPON = $02 ; prend en compte le $00
@@ -659,7 +674,7 @@ StageBeginFromDeath:
 	.noEndStage:
 
 	; INIT player
-	; 	metter life
+	; 	meter life
 	lda #$1c
 	sta meters
 	; Sprite
@@ -709,6 +724,12 @@ MainLoop:
 	lda playerWalkTimer
 	; todo gestion du run
 
+	; Blink state
+	lda playerBlinkState
+	beq .endBlinkState
+		dec playerBlinkState
+	.endBlinkState:
+
 	jsr RunBossIA
 	jsr RunCollisionChecks ; /!\ jusqu'a LoadEnemies $00 n'est plus settable
 	jsr RunWeaponIA
@@ -723,62 +744,6 @@ MainLoop:
 	MainLoopEndCurrentFrame:
 		jsr NextFrame
 		JMP MainLoop
-
-RunCollisionChecks:
-	; X
-	sec
-	lda objectPosX ; milieu du perso
-	sbc scrollPosX 
-	sec
-	sbc #$07
-	sta $00  ; arrière du perso 
-	clc
-	adc #$0E 
-	sta $01  ; avant du perso
-	; Y
-	sec
-	lda objectPosY ; milieu du perso
-	sbc #$0A ; $0b 
-	sta $03  ; haut du perso
-	clc
-	adc #$26 ; bas du perso ; #$16
-	sta $02
-
-	;lda playerBlinkState
-	; test boss stratégie
-
-	lda frameCounter
-	and #$01
-	clc
-	adc #$10 ; object paires ou impaires
-	tax
-
-	.loop:
-		jsr TestCollisionWithPlayer
-		bcs .doCollision
-		inx
-		inx
-		cpx totalObjects
-		bcc .loop
-		rts ; pas de collision
-
-	.doCollision:
-		lda objectSpriteNum, x
-		cmp #$ff ; #$ff = item
-		bne .collisionEnemy
-	.collisionItem:
-	; SI ID >= #$3C et ID < #$48 l'item est un bonus
-		lda objectType, X ; item d'item
-		cmp #$48 
-		bcs .collisionEnemy
-		cmp #$3c
-		bcc .collisionEnemy
-		jmp GotItem
-
-	.collisionEnemy:
-
-
-	rts
 
 ; A = currentStripeEndType (0=right 1=up 2=left 3=down)  
 CheckStripeEnding:
@@ -928,6 +893,9 @@ ScrollNextRoom:
 	and #$e0
 	bne .move 
 		; todo gestion room boss
+		lda #$01
+		sta bossCurrentStrategy
+		; todo sound boss
 	.move:
 	pla 
 	and #$1f
@@ -946,6 +914,101 @@ ScrollNextRoom:
 	;lda teleportEnteredFlage
 
 	jmp CheckStripeEndingEnd
+
+RunCollisionChecks:
+	; X
+	sec
+	lda objectPosX ; milieu du perso
+	sbc scrollPosX 
+	sec
+	sbc #$07
+	sta $00  ; arrière du perso 
+	clc
+	adc #$0E 
+	sta $01  ; avant du perso
+	; Y
+	sec
+	lda objectPosY ; milieu du perso
+	sbc #$0A ; $0b 
+	sta $03  ; haut du perso
+	clc
+	adc #$26 ; bas du perso ; #$16
+	sta $02
+
+	;lda playerBlinkState
+	; test boss stratégie
+
+	lda frameCounter
+	and #$01
+	clc
+	adc #$10 ; object paires ou impaires
+	tax
+
+	.loop:
+		jsr TestCollisionWithPlayer
+		bcs .doCollision
+			.nextObject:
+				inx
+				inx
+				cpx totalObjects
+				bcc .loop
+		rts ; pas de collision
+
+	.doCollision:
+		lda objectSpriteNum, x
+		cmp #$ff ; #$ff = item
+		bne .collisionEnemy
+	.collisionItem:
+	; SI ID >= #$3C et ID < #$48 l'item est un bonus
+		lda objectType, X ; item d'item
+		cmp #$48 
+		bcs .collisionOtherObject
+		cmp #$3c
+		bcc .collisionOtherObject
+		jmp GotItem
+
+	.collisionOtherObject:
+		lda playerBlinkState ; player est invincible
+		bne .nextObject      ; object suivant
+	
+		lda objectSpriteNum, x
+		cmp #$ff
+		beq .collisionEnemy
+	
+	.collisionEnemy:
+		;lda bossCurrentStrategy
+
+		lda objectType, x
+		tay
+		lda enemyHitTable, y
+		sta $0C
+		lda objectFlags, x
+
+	.registerPlayerCollision:
+		sta $0d
+
+		sec
+		lda meters
+		sbc $0c
+		sta meters
+		beq .death
+		bcs .justHit
+		.death:
+			lda #$00
+			sta meters
+			jmp KillPlayer
+
+		.justHit:
+			lda $0d
+			and #$40
+			eor #$40
+			ora #$03
+			sta objectFlags
+
+			lda #$6f
+			sta playerBlinkState
+	
+		rts
 
 ;bank5_938B_table
 shutter2Table: ;right, up, left, down. down=up, up=down
@@ -966,11 +1029,12 @@ PlayerIA:
 
 	and #$0f
 	beq .checkClimbing
-	; todo perso est entrain de: 
+	; Le perso est entrain de: 
 	;     quitter une echelle
 	;     lancer quelque chose en standing
 	;     se faire toucher 
-	
+	jmp DoPlayerHit
+
 	.checkClimbing:
 		; Entrain de monter une échelle ?
 		lda objectFireDelay
@@ -1197,9 +1261,52 @@ PlayerIA:
 	.end:
 		rts
 
+DoPlayerHit:
+	lda objectSpriteNum
+	cmp #PLAYER_SPRITE_HIT_1
+	beq .next
+	;.init:
+		lda #PLAYER_SPRITE_HIT_1
+		sta objectSpriteNum
+		lda #$01
+		sta objectActionStateCounter
+		;lda #$00
+		;sta objectFireDelay
+		
+	.next:
+		lda objectActionStateCounter
+		beq .normalState
+
+		inc objectActionStateCounter
+		lda #$40
+		sta objectXSpeedFraction
+		lda #$01
+		sta objectXSpeed
+		
+		lda objectFlags
+		and #$40
+		bne .movementLeft
+		jsr ObjectUpdateMovementRight
+		jmp .autoCenter
+	.movementLeft:
+		jsr ObjectUpdateMovementLeft
+	.autoCenter:
+		jsr AutoCenterScreen
+		rts
+
+	.normalState:
+		lda objectFlags
+		and #$40
+		sta objectFlags
+		lda #PLAYER_SPRITE_STANDING ; on remet en standig
+		sta objectSpriteNum
+		lda #$00
+		sta joyPadOld ; reset touche
+		jmp PlayerIACheckMoving
+
 RunBossIA
-	lda bossCurrentStrategy
-	cmp #$01
+	lda bossFightingId
+	cmp #$02
 	bcs .run
 	lda #$00
 	sta objectLifeMeter+1 ; vie du boss à zéro
@@ -1215,9 +1322,55 @@ RunBossIA
 	inc bossCurrentStrategy
 	rts
 
-BossIABegin:
-	
+	lda bossFightingId
+	cmp #$06 
+	bcc .initBoss 
+
+	.initBoss:
+		;ldx #$00
+		;stx objectId ; voir pour supprimer
+		;stx bossVariable43
+		;stx bossVariable44
+		;inx ; boss sera objectID #01
+		;lda #OBJECT_TYPE_BOSS ; defaultEnemySpeed id
+		;jsr InitEnemyDefaultSpeed
+		;jsr InitActor
+		;dex
+		;stx objectLifeMeter+1 ; init life boss à 00
+		;ldx bossFightingId
+		;; sprite Num
+		;lda bossInitialStatus, x
+		;sta objectSpriteNum+1
+		;; posX
+		;lda bossInitialXcoord, x
+		;sta objectPosX+1
+		;; posY
+		;lda bossInitialYcoord
+		;sta objectPosY+1
+		;; flags
+		;lda #$17 
+		;sta objectFlags+1
+		;inc objectActionStateCounter+1
+		;inc bossCurrentStrategy ; on passe à la strat suivante
+		;lda #$5E
+		;sta bossVariable3F
+
+		;inc objectId
+		;jsr 
+
 	rts
+
+BossIABegin:
+	cmp #$03
+	bne .todo
+	lda bossFightingId
+	cmp #$02
+	bne .end
+	; remplie le meters de life du boss 
+
+	.todo:
+	.end:
+	rts ; retour MainLoop
 
 ; /!\ doit être suivi de ObjectShouldBeDestroyed ne pas déplacer /!\
 ; RunEnemyAI
@@ -1572,7 +1725,7 @@ EnemyKilled:
 	lda objectType, x 
 	pha  ; save du type de l'ennemi tué
 	
-	lda #$1b ; creation object Type explosion
+	lda #OBJECT_TYPE_ENEMY_KILLING ; creation object Type explosion
 	sta objectType, x
 
 	lda #$ff
@@ -3647,9 +3800,11 @@ SpawnEnemy:
 		ldy $03 ; restore y
 	rts
 
-; Carry
-;   1 = pas trouvé
-;   0 = trouvé
+; return: 
+;   Carry
+;       1 = pas trouvé
+;       0 = trouvé
+;   x = id object
 FindFreeObject:
 	lda #$F8
 	.loop:
@@ -5332,12 +5487,27 @@ DrawWeaponAndMetters:
 	sta $04
 	lda #$48 ; Y coord
 	sta $05
+	; Life player
 	lda meters
 	jsr DrawMeter
 
+	; Life boss
+	lda bossCurrentStrategy
+	beq .weapon
+	lda #$02 ; sprite attr
+	sta $06
+	lda #$10 ; X coord
+	sta $04
+	lda #$48 ; Y coord
+	sta $05
+	lda meters+1
+	jsr DrawMeter
+
+
 	; weapon
-	lda weaponSelect
-	jsr DrawWaepon
+	.weapon:
+		lda weaponSelect
+		jsr DrawWaepon
 	.end:
 		rts
 
@@ -5513,7 +5683,7 @@ DrawObjectSet:
 
 		ldx $0d ; sprite counter
 		lda $0c ; id objet
-		beq .noBlinkState
+		bne .noBlinkState
 		lda playerBlinkState
 		and #$02
 		beq .noBlinkState
@@ -6106,12 +6276,25 @@ InitActor:
 	sta objectFireDelay, x
 	sta objectLifeCycleCounter, x
 
+	; todo sound
+
 	clc
 	rts
 
 	InitActor_end:
 		pla
 		rts
+
+; en fonction de l'bossFightingId
+bossInitialStatus: ; at ED91
+    .byte $1C,$20,$1E,$22,$24,$26
+    .byte $00,$00,$00
+bossInitialXcoord: ; at ED9A
+    .byte $C0,$C0,$C0,$C0,$C0,$C0
+    .byte $C0,$B0,$00
+bossInitialYcoord:
+    .byte $B4,$B4,$B4,$B4,$B4,$B0
+    .byte $B4,$B4,$00
 
 ; YSpeedFraction, YSpeed, XSpeedFraction and XSpeed
 defaultEnemySpeed:
@@ -6123,7 +6306,7 @@ defaultEnemySpeed:
     .db $06,$00,$20,$01 ;05 empty
     .db $07,$00,$20,$01 ;06 empty
     .db $00,$04,$00,$00 ;07 bonus
-    .db $09,$00,$20,$01 ;08 empty
+    .db $D0,$02,$D0,$02 ;08 player Hit
     .db $0a,$00,$20,$01 ;09 empty
     .db $0b,$00,$20,$01 ;0a empty
     .db $0c,$00,$20,$01 ;0b empty
@@ -6143,7 +6326,7 @@ defaultEnemySpeed:
     .db $00,$00,$20,$01 ;19 empty
     .db $00,$00,$20,$01 ;1a empty
     .db $00,$00,$20,$01 ;1b empty
-    .db $00,$04,$00,$00 ;1c empty
+    .db $c0,$ff,$00,$00 ;1c boss 1
 
 
 ;TableObjectXWidthTable1
@@ -6223,6 +6406,9 @@ WeaponDamageA:
 WeaponDamageB
 	.db $20  ; crackboy
 
+
+enemyHitTable:
+	.db $05 ; crackboy 
 
 ; Interupt
   .org $FFFA     ;first of the three vectors starts here
