@@ -191,6 +191,10 @@ ID_WEAPON_A = $00
 ID_WEAPON_B = $01
 ID_WEAPON_C = $02
 
+; Boss
+BOSS_STRAT_NONE = $00
+BOSS_STRAT_INIT = $01
+
 ;-----------
 ; bank 01
   .include "data/level/level_1.asm"
@@ -850,70 +854,58 @@ ScrollNextRoom:
 	ldx stageId
 	lda firstDoorLocations, x
 	cmp objectPosScreen;
-	bne .bossDoor
-	; .firstDood:
-		; todo update palette
-		jsr OpenFirstDoor
-	.bossDoor:
-		; la fermeture de la boss door se fait RunBossIA
-		; 	avec le lancement de la music 
-		ldx stageId
-		stx bossFightingId
-		lda #$70
-		sta miscCounter
-		lda objectPosScreen
-		cmp bossDoorLocations, x
-		bne .runScrolling
-		lda #$01
-		sta bossCurrentStrategy
+	bne .runScrolling
+	; todo update palette
+	jsr OpenFirstDoor
 	.runScrolling:
-	inc objectPosScreen
-	; todo gestion ennemi
-
-	lda currentStripeEndType
-	cmp #$04 ; max 5 rooms de suite
-	php
-	bne .doScrolling
+		inc objectPosScreen
+		; todo gestion ennemi
+		lda currentStripeEndType
+		cmp #$04 ; max 5 rooms de suite
+		php
+		bne .doScrolling
 		inc scrollPosScreen
 	.doScrolling:
 		jsr DoScrolling
-	plp
-	beq .nextFrame
-	inc scrollPosScreen
+		plp
+		beq .nextFrame
+		inc scrollPosScreen
 	.nextFrame:
 		jsr NextFrame
-	lda currentEndScreen
-	clc
-	adc #$02 ; on draw la room suivante pour préparer le scroll
-	jsr DrawOneScreen 
-	inc currentOrderNum
-	ldy currentOrderNum
-	jsr RoomLayoutLoadRoomNum
-	pha
-	and #$e0
-	bne .move 
+		lda currentEndScreen
+		clc
+		adc #$02 ; on draw la room suivante pour préparer le scroll
+		jsr DrawOneScreen 
+		inc currentOrderNum
+		ldy currentOrderNum
+		jsr RoomLayoutLoadRoomNum
+		pha
+		and #$e0
+		bne .move 
 		; todo gestion room boss
-		lda #$01
+		lda #BOSS_STRAT_INIT
 		sta bossCurrentStrategy
+		lda stageId
+		sta bossFightingId
 		; todo sound boss
 	.move:
-	pla 
-	and #$1f
-	sta currentBeginScreen
-	pla
-	TAX
-	CLC
-	adc currentBeginScreen
-	sta currentEndScreen
-	stx currentBeginScreen
-	lda #$00
-	sta joyPad
-	sta joyPadOld
-	lda #$41
-	sta screenMovedFlag
-	;lda teleportEnteredFlage
+		pla 
+		and #$1f
+		sta currentBeginScreen
+		pla
+		TAX
+		CLC
+		adc currentBeginScreen
+		sta currentEndScreen
+		stx currentBeginScreen
+		lda #$00
+		sta joyPad
+		sta joyPadOld
+		lda #$41
+		sta screenMovedFlag
+		;lda teleportEnteredFlage
 
-	jmp CheckStripeEndingEnd
+		jmp CheckStripeEndingEnd
 
 RunCollisionChecks:
 	; X
@@ -947,11 +939,11 @@ RunCollisionChecks:
 	.loop:
 		jsr TestCollisionWithPlayer
 		bcs .doCollision
-			.nextObject:
-				inx
-				inx
-				cpx totalObjects
-				bcc .loop
+		.nextObject:
+			inx
+			inx
+			cpx totalObjects
+			bcc .loop
 		rts ; pas de collision
 
 	.doCollision:
@@ -1072,7 +1064,7 @@ PlayerIA:
 		sta playerStandingTimer
 		sta playerWalkTimer
 		
-	
+
 	; Si gauche/droite est appuyé pendant cette frame
 	;  
 	lda joyPad ; Touche pressée
@@ -1305,8 +1297,8 @@ DoPlayerHit:
 		jmp PlayerIACheckMoving
 
 RunBossIA
-	lda bossFightingId
-	cmp #$02
+	lda bossCurrentStrategy
+	cmp #BOSS_STRAT_INIT
 	bcs .run
 	lda #$00
 	sta objectLifeMeter+1 ; vie du boss à zéro
@@ -2681,10 +2673,10 @@ VerticalScrollPoint:
 		;move player
 		clc
 		lda objectPosYFraction
-		adc verticalScroolPosYFraction, x
+		adc verticalScrollPosYFraction, x
 		sta objectPosYFraction
 		lda objectPosY
-		adc verticalScroolPosY, x
+		adc verticalScrollPosY, x
 		sta objectPosY
 
 		; scrolling vertical
@@ -2717,9 +2709,9 @@ verticalScrollIncrementTable:
 	.db  $fc, $04 ; -4,  4 => complément à 2 pour neg
 verticalScroll33Table:
 	.db $FF, $01 ; Increment pour var33
-verticalScroolPosYFraction: 
+verticalScrollPosYFraction: 
 	.db $BF, $41 ; Increment of objectPosYFraction+0
-verticalScroolPosY: 
+verticalScrollPosY: 
 	.db $03, $FC ; Increment of ObjectPosY+0
 
 
@@ -3669,7 +3661,7 @@ LoadEnemiesForward:
 		iny ; ici id écran = perso écran
 		lda [currentRoomPointer], y ; pos X
 		dey ; dey car on a iny pour le check de pos X
-		cmp $04 ; scroolPosx -1 du perso
+		cmp $04 ; scrollPosx -1 du perso
 		beq .setValue ; =
 		bcs .checkFoBackward ; <
 
@@ -4671,7 +4663,7 @@ DrawBLocksScroll:
 	ora tsaPPUTransferAttrAddress+1
 	sta tsaPPUTransferAttrAddress+1
 
-	; Ajustement de l'adresse en fonction de ScroolPosScreen
+	; Ajustement de l'adresse en fonction de ScrollPosScreen
 	ldx #$20
 	lda scrollPosScreen ; si l'id du screen est pair NT 20 sinon 24
 	and #$01
